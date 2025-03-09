@@ -1,0 +1,17 @@
+[project]
+name = "guitar_learning_game"
+version = "0.1.0"
+description = "A bass guitar learning game using frequency detection"
+dependencies = [
+    "sounddevice",
+    "numpy",
+    "aubio",
+    "pygame",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
