@@ -1,6 +1,14 @@
 import sounddevice as sd
 import numpy as np
 import aubio
+import time
+from collections import deque
+from typing import NamedTuple
+
+class Note(NamedTuple):
+    frequency: float
+    name: str
+    confidence: float
 
 def main():
     # Audio settings
@@ -17,6 +25,28 @@ def main():
     pitch_detector.set_unit("Hz")
     pitch_detector.set_tolerance(0.85)
 
+    # Note stability tracking
+    history_size = 5  # Number of samples to keep for stability check
+    note_history = deque(maxlen=history_size)
+    stability_threshold = 1.0  # Hz - maximum difference for note to be considered stable
+
+    def is_note_stable(note: Note) -> bool:
+        if len(note_history) < history_size:
+            return False
+        
+        # Check if all recent frequencies are within threshold
+        frequencies = [n.frequency for n in note_history]
+        max_diff = max(frequencies) - min(frequencies)
+        return max_diff <= stability_threshold
+
+    def get_note_name(freq):
+        if freq <= 0: return "---"
+        notes = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
+        half_steps = round(12 * np.log2(freq / 440.0))
+        octave = 4 + (half_steps + 9) // 12
+        note_idx = (half_steps % 12 + 12) % 12
+        return f"{notes[note_idx]}{octave}"
+
     def audio_callback(indata, frames, time, status):
         if status:
             # Only print overflow messages once in a while
@@ -30,16 +60,14 @@ def main():
         confidence = pitch_detector.get_confidence()
         
         if pitch > 0 and confidence > 0.3:
-            note = get_note_name(pitch)
-            print(f"\rFrequency: {pitch:.1f} Hz | Note: {note} | Confidence: {confidence:.2f}", end="", flush=True)
-
-    def get_note_name(freq):
-        if freq <= 0: return "---"
-        notes = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
-        half_steps = round(12 * np.log2(freq / 440.0))
-        octave = 4 + (half_steps + 9) // 12
-        note_idx = (half_steps % 12 + 12) % 12
-        return f"{notes[note_idx]}{octave}"
+            note_name = get_note_name(pitch)
+            current_note = Note(pitch, note_name, confidence)
+            note_history.append(current_note)
+            
+            # Check stability and update display
+            stable = is_note_stable(current_note)
+            stability_indicator = "●" if stable else "○"
+            print(f"\r{stability_indicator} {note_name} ({pitch:.1f} Hz) | Confidence: {confidence:.2f}", end="", flush=True)
 
     # List available devices
     print("\nAvailable audio input devices:")
@@ -57,6 +85,7 @@ def main():
     print(f"Buffer size: {buffer_size} samples (~{buffer_size/sample_rate*1000:.1f}ms)")
     print("\nStarting audio stream...")
     print("Play your guitar - checking pitch detection")
+    print("● = stable note, ○ = unstable note")
     
     try:
         with sd.InputStream(

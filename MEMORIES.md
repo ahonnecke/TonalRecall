@@ -202,6 +202,64 @@ with sd.InputStream(callback=audio_callback, samplerate=SAMPLE_RATE, channels=1,
         print("\nStopping.")
 ```
 
-## 6. Future Improvements
-- Optimize Further with Rust
+## 6. Audio Processing with Aubio
+### Buffer Size Considerations
+When using aubio for pitch detection, it's critical to understand the relationship between buffer sizes:
 
+1. **Audio Stream Buffer**
+   - The buffer size used by `sounddevice` for capturing audio
+   - Must match the buffer size expected by aubio's pitch detector
+   - Smaller buffers (e.g., 512 samples) provide lower latency but may be more prone to overflow
+
+2. **Pitch Detector Configuration**
+   - Aubio's pitch detector expects its input size to exactly match its configured buffer size
+   - The input data length must match `buf_size` parameter exactly
+   - Common error pattern: if input size is X, but buf_size is Y, you'll get "ValueError: input size of pitch should be Y, not X"
+
+### Best Practices
+1. **Buffer Alignment**
+   ```python
+   buffer_size = 512  # Choose a power of 2
+   pitch_detector = aubio.pitch(
+       method="yin",
+       buf_size=buffer_size,  # Must match the audio stream's blocksize
+       hop_size=buffer_size,  # Process entire buffer at once
+       samplerate=sample_rate
+   )
+   ```
+
+2. **Direct Processing**
+   - Process audio data directly as it comes from the audio callback
+   - Avoid complex buffer management when possible
+   - Use mono audio to simplify processing
+
+3. **Latency Optimization**
+   ```python
+   with sd.InputStream(
+       blocksize=buffer_size,
+       callback=audio_callback,
+       latency='low'  # Request low latency mode
+   ):
+   ```
+
+### Example Implementation
+```python
+def audio_callback(indata, frames, time, status):
+    if status and status.input_overflow:
+        print("\rInput overflow", end="")
+        return
+        
+    # Get mono audio data and process it directly
+    audio_data = indata[:, 0] if indata.shape[1] > 0 else indata.flatten()
+    pitch = pitch_detector(audio_data.astype(np.float32))[0]
+    confidence = pitch_detector.get_confidence()
+    
+    if pitch > 0 and confidence > 0.3:
+        note = get_note_name(pitch)
+        print(f"\rFrequency: {pitch:.1f} Hz | Note: {note}", end="")
+```
+
+This approach provides reliable real-time pitch detection with minimal latency, suitable for interactive applications like music games.
+
+## 7. Future Improvements
+- Optimize Further with Rust
