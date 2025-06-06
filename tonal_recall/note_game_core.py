@@ -109,7 +109,7 @@ class NoteGame:
             note: The detected note
             signal_strength: The strength of the signal
         """
-        if not self.running or not self.current_target or not self.screen:
+        if not self.running or not self.current_target:
             return
         # For level 4, check both note and string
         if self.level == 4:
@@ -127,23 +127,15 @@ class NoteGame:
             self.current_note = (
                 f"{played_note} on {played_string}" if played_string else played_note
             )
-            self.update_display()
-            # Check if this is the target note/string
-            target_note, target_string = self.current_target
-            if played_note == target_note and played_string == target_string:
-                elapsed = time.time() - self.start_time
-                self.stats["times"].append(elapsed)
-                self.stats["correct_notes"] += 1
-                # Show success message
-                self.screen.addstr(
-                    5,
-                    0,
-                    f" Correct! {target_note} on {target_string} detected in {elapsed:.2f} seconds",
-                )
-                self.screen.refresh()
-                time.sleep(1)
-                self.screen.addstr(5, 0, " " * 50)
-                self.pick_new_target()
+            self._needs_update = True
+        # Check if this is the target note/string
+        target_note, target_string = self.current_target
+        if played_note == target_note and played_string == target_string:
+            elapsed = time.time() - self.start_time
+            self.stats["times"].append(elapsed)
+            self.stats["correct_notes"] += 1
+            self.pick_new_target()
+            self._needs_update = True
         else:
             # Extract just the note letter (A, B, C, etc.)
             simple_note = note.name[0]
@@ -153,22 +145,14 @@ class NoteGame:
             else:
                 self.stats["notes_played"][simple_note] = 1
             self.current_note = note.name
-            self.update_display()
-            # Check if this is the target note
-            if simple_note == self.current_target:
-                elapsed = time.time() - self.start_time
-                self.stats["times"].append(elapsed)
-                self.stats["correct_notes"] += 1
-                # Show success message
-                self.screen.addstr(
-                    5,
-                    0,
-                    f" Correct! {self.current_target} detected in {elapsed:.2f} seconds",
-                )
-                self.screen.refresh()
-                time.sleep(1)
-                self.screen.addstr(5, 0, " " * 50)
-                self.pick_new_target()
+            self._needs_update = True
+        # Check if this is the target note
+        if simple_note == self.current_target:
+            elapsed = time.time() - self.start_time
+            self.stats["times"].append(elapsed)
+            self.stats["correct_notes"] += 1
+            self.pick_new_target()
+            self._needs_update = True
 
     def pick_new_target(self):
         """Pick a new target note (or note+string for level 4)"""
