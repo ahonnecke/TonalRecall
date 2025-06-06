@@ -9,6 +9,75 @@ from typing import List, Dict
 from note_detector import NoteDetector
 import pyfiglet
 
+class NoteGameUI:
+    def update_display(self, game):
+        raise NotImplementedError
+    def show_stats(self, game):
+        raise NotImplementedError
+    def cleanup(self):
+        pass
+
+class CursesUI(NoteGameUI):
+    def __init__(self):
+        self.screen = None
+    def init_screen(self):
+        self.screen = curses.initscr()
+        curses.noecho()
+        curses.cbreak()
+        self.screen.keypad(True)
+        self.screen.clear()
+        return self.screen
+    def update_display(self, game):
+        screen = self.screen
+        if not screen:
+            return
+        screen.clear()
+        screen.addstr(0, 0, f"Time remaining: {int(game.time_remaining)}s")
+        if game.current_target:
+            if game.level == 4 and isinstance(game.current_target, tuple):
+                note_str = f"{game.current_target[0]} on {game.current_target[1]}"
+            else:
+                note_str = str(game.current_target)
+            screen.addstr(2, 0, "Play this note:")
+            figlet_text = pyfiglet.figlet_format(note_str)
+            lines = figlet_text.splitlines()
+            height, width = screen.getmaxyx()
+            start_y = max(4, (height // 2) - (len(lines) // 2))
+            for i, line in enumerate(lines):
+                start_x = max(0, (width // 2) - (len(line) // 2))
+                if start_y + i < height:
+                    try:
+                        screen.addstr(start_y + i, start_x, line)
+                    except curses.error:
+                        pass
+        if game.current_note:
+            screen.addstr(height - 4, 0, f"You played: {game.current_note}")
+        screen.addstr(height - 2, 0, f"Correct: {game.stats['correct_notes']} / {game.stats['total_notes']}")
+        screen.refresh()
+    def show_stats(self, game):
+        self.cleanup()
+        print("\n===== Game Statistics =====")
+        print(f"Notes attempted: {game.stats['total_notes']}")
+        print(f"Notes completed: {game.stats['correct_notes']}")
+        if game.stats['times']:
+            avg_time = sum(game.stats['times']) / len(game.stats['times'])
+            min_time = min(game.stats['times']) if game.stats['times'] else 0
+            max_time = max(game.stats['times']) if game.stats['times'] else 0
+            print(f"Average time per note: {avg_time:.2f} seconds")
+            print(f"Fastest note: {min_time:.2f} seconds")
+            print(f"Slowest note: {max_time:.2f} seconds")
+        print("\nNotes played:")
+        for note, count in sorted(game.stats['notes_played'].items()):
+            print(f"  {note}: {count} times")
+        print("\nThank you for playing!")
+    def cleanup(self):
+        if self.screen:
+            self.screen.keypad(False)
+            curses.nocbreak()
+            curses.echo()
+            curses.endwin()
+            self.screen = None
+
 class NoteGame:
     """A simple game to practice playing notes on a guitar or bass"""
     
@@ -26,6 +95,7 @@ class NoteGame:
         self.current_note = None  # Track the current note being played
         self.start_time = 0
         self.time_remaining = 0
+        self.ui = None  # UI abstraction
         self.screen = None  # Curses screen
         self.stats = {
             'total_notes': 0,
@@ -139,43 +209,8 @@ class NoteGame:
     
     def update_display(self):
         """Update the game display"""
-        if not self.screen:
-            return
-        self.screen.clear()
-
-        # Show time remaining
-        self.screen.addstr(0, 0, f"Time remaining: {int(self.time_remaining)}s")
-
-        # Show current target note in large ASCII art, centered
-        if self.current_target:
-            if self.level == 4 and isinstance(self.current_target, tuple):
-                note_str = f"{self.current_target[0]} on {self.current_target[1]}"
-            else:
-                note_str = str(self.current_target)
-            self.screen.addstr(2, 0, "Play this note:")
-
-            # Render large ASCII art for the note
-            figlet_text = pyfiglet.figlet_format(note_str)
-            lines = figlet_text.splitlines()
-            height, width = self.screen.getmaxyx()
-            # Calculate vertical start to center
-            start_y = max(4, (height // 2) - (len(lines) // 2))
-            # Calculate horizontal start to center each line
-            for i, line in enumerate(lines):
-                start_x = max(0, (width // 2) - (len(line) // 2))
-                if start_y + i < height:
-                    try:
-                        self.screen.addstr(start_y + i, start_x, line)
-                    except curses.error:
-                        pass  # If line doesn't fit, skip
-
-        # Show last detected note
-        if self.current_note:
-            self.screen.addstr(height - 4, 0, f"You played: {self.current_note}")
-
-        # Show stats
-        self.screen.addstr(height - 2, 0, f"Correct: {self.stats['correct_notes']} / {self.stats['total_notes']}")
-        self.screen.refresh()
+        if self.ui:
+            self.ui.update_display(self)
     
     def start_game(self, duration=60):
         """Start the game
@@ -184,15 +219,13 @@ class NoteGame:
             duration: How long to play the game for (in seconds)
         """
         # Initialize curses
-        self.screen = curses.initscr()
-        curses.noecho()  # Don't echo keypresses
-        curses.cbreak()  # React to keys instantly
-        self.screen.keypad(True)  # Enable special keys
-        self.screen.clear()
+        self.ui = CursesUI()
+        self.screen = self.ui.init_screen()
         
         # Set up signal handler to restore terminal on exit
         def cleanup(sig, frame):
-            self.cleanup_curses()
+            if self.ui:
+                self.ui.cleanup()
             exit(0)
         signal.signal(signal.SIGINT, cleanup)
         
@@ -255,40 +288,19 @@ class NoteGame:
         finally:
             self.running = False
             self.detector.stop()
-            self.show_stats()
-            self.cleanup_curses()
+            if self.ui:
+                self.ui.show_stats(self)
+                self.ui.cleanup()
     
     def cleanup_curses(self):
         """Clean up curses settings"""
-        if self.screen:
-            self.screen.keypad(False)
-            curses.nocbreak()
-            curses.echo()
-            curses.endwin()
-            self.screen = None
+        if self.ui:
+            self.ui.cleanup()
     
     def show_stats(self):
         """Show game statistics"""
-        # Clean up curses first
-        self.cleanup_curses()
-        
-        print("\n===== Game Statistics =====")
-        print(f"Notes attempted: {self.stats['total_notes']}")
-        print(f"Notes completed: {self.stats['correct_notes']}")
-        
-        if self.stats['times']:
-            avg_time = sum(self.stats['times']) / len(self.stats['times'])
-            min_time = min(self.stats['times']) if self.stats['times'] else 0
-            max_time = max(self.stats['times']) if self.stats['times'] else 0
-            print(f"Average time per note: {avg_time:.2f} seconds")
-            print(f"Fastest note: {min_time:.2f} seconds")
-            print(f"Slowest note: {max_time:.2f} seconds")
-        
-        print("\nNotes played:")
-        for note, count in sorted(self.stats['notes_played'].items()):
-            print(f"  {note}: {count} times")
-        
-        print("\nThank you for playing!")
+        if self.ui:
+            self.ui.show_stats(self)
 
 @click.command()
 @click.option('--debug', is_flag=True, help='Show debug information')
@@ -321,11 +333,9 @@ def main(debug, duration, level):
         except Exception as e:
             print(f"Warning: Could not save last game duration: {e}")
     except Exception as e:
-        # Make sure terminal is restored if there's an error
-        if game is not None and getattr(game, 'screen', None) is not None:
-            curses.nocbreak()
-            curses.echo()
-            curses.endwin()
+        # Make sure UI is restored if there's an error
+        if game is not None and getattr(game, 'ui', None) is not None:
+            game.ui.cleanup()
         print(f"Error: {e}")
 
 if __name__ == '__main__':
