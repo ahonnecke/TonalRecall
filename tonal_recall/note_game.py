@@ -11,11 +11,12 @@ from note_detector import NoteDetector
 class NoteGame:
     """A simple game to practice playing notes on a guitar or bass"""
     
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, level=1):
         """Initialize the game
         
         Args:
             debug: Whether to show debug information
+            level: The game level (affects possible notes)
         """
         self.debug = debug
         self.detector = NoteDetector(debug=debug)
@@ -31,9 +32,37 @@ class NoteGame:
             'times': [],
             'notes_played': {}
         }
-        
-        # Available notes to play (just the basic notes, no sharps/flats)
-        self.available_notes = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+        self.level = level
+        # Define notes per level
+        self.level_notes = {
+            1: ['E', 'A', 'D', 'G'],  # Open strings only
+            2: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],  # All basic notes
+            3: [
+                'A', 'A#', 'Bb',
+                'B',
+                'C', 'C#', 'Db',
+                'D', 'D#', 'Eb',
+                'E',
+                'F', 'F#', 'Gb',
+                'G', 'G#', 'Ab'
+            ],  # Chromatic scale with sharps and flats
+            4: None,  # Level 4: specific note on a specific string (implemented below)
+            # Level 5: specific note at a specific fret (future)
+            # Level 6: ask for enharmonic equivalents (future)
+            # Level 7: add timing/tempo constraints (future)
+            # Level 8: chord tones or intervals (future)
+        }
+        # For level 4, we'll define the available notes as (note, string) tuples
+        self.guitar_strings = ['E', 'A', 'D', 'G']  # Could be expanded for 6-string or bass
+        self.chromatic_notes = [
+            'A', 'A#', 'Bb', 'B', 'C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab'
+        ]
+        if self.level == 4:
+            self.available_notes = [(note, string) for note in self.chromatic_notes for string in self.guitar_strings]
+        else:
+            self.available_notes = self.level_notes.get(self.level, ['A', 'B', 'C', 'D', 'E', 'F', 'G'])
+        # Set available notes based on level (default to all notes if level not mapped)
+        self.available_notes = self.level_notes.get(self.level, ['A', 'B', 'C', 'D', 'E', 'F', 'G'])
     
     def note_detected_callback(self, note, signal_strength):
         """Callback for when a note is detected
@@ -44,42 +73,65 @@ class NoteGame:
         """
         if not self.running or not self.current_target or not self.screen:
             return
-            
-        # Extract just the note letter (A, B, C, etc.)
-        simple_note = note.name[0]
-        
-        # Record that this note was played
-        if simple_note in self.stats['notes_played']:
-            self.stats['notes_played'][simple_note] += 1
+        # For level 4, check both note and string
+        if self.level == 4:
+            # Assume note.name is something like 'A', 'A#', etc.
+            # and note.string is the string name (e.g., 'E', 'A', etc.)
+            # If note.string is not available, you may need to adapt this logic
+            played_note = note.name
+            played_string = getattr(note, 'string', None)
+            # Record that this note was played
+            key = (played_note, played_string)
+            if key in self.stats['notes_played']:
+                self.stats['notes_played'][key] += 1
+            else:
+                self.stats['notes_played'][key] = 1
+            self.current_note = f"{played_note} on {played_string}" if played_string else played_note
+            self.update_display()
+            # Check if this is the target note/string
+            target_note, target_string = self.current_target
+            if played_note == target_note and played_string == target_string:
+                elapsed = time.time() - self.start_time
+                self.stats['times'].append(elapsed)
+                self.stats['correct_notes'] += 1
+                # Show success message
+                self.screen.addstr(5, 0, f" Correct! {target_note} on {target_string} detected in {elapsed:.2f} seconds")
+                self.screen.refresh()
+                time.sleep(1)
+                self.screen.addstr(5, 0, " " * 50)
+                self.pick_new_target()
         else:
-            self.stats['notes_played'][simple_note] = 1
-        
-        # Update the current note being played
-        self.current_note = note.name
-        self.update_display()
-        
-        # Check if this is the target note
-        if simple_note == self.current_target:
-            elapsed = time.time() - self.start_time
-            self.stats['times'].append(elapsed)
-            self.stats['correct_notes'] += 1
-            
-            # Show success message
-            self.screen.addstr(5, 0, f"✓ Correct! {self.current_target} detected in {elapsed:.2f} seconds")
-            self.screen.refresh()
-            time.sleep(1)  # Pause briefly to show the success message
-            self.screen.addstr(5, 0, " " * 50)  # Clear the success message
-            
-            # Pick a new target note
-            self.pick_new_target()
+            # Extract just the note letter (A, B, C, etc.)
+            simple_note = note.name[0]
+            # Record that this note was played
+            if simple_note in self.stats['notes_played']:
+                self.stats['notes_played'][simple_note] += 1
+            else:
+                self.stats['notes_played'][simple_note] = 1
+            self.current_note = note.name
+            self.update_display()
+            # Check if this is the target note
+            if simple_note == self.current_target:
+                elapsed = time.time() - self.start_time
+                self.stats['times'].append(elapsed)
+                self.stats['correct_notes'] += 1
+                # Show success message
+                self.screen.addstr(5, 0, f" Correct! {self.current_target} detected in {elapsed:.2f} seconds")
+                self.screen.refresh()
+                time.sleep(1)
+                self.screen.addstr(5, 0, " " * 50)
+                self.pick_new_target()
     
     def pick_new_target(self):
-        """Pick a new target note"""
-        # Don't pick the same note twice in a row
+        """Pick a new target note (or note+string for level 4)"""
         old_target = self.current_target
-        while self.current_target == old_target:
-            self.current_target = random.choice(self.available_notes)
-        
+        if self.level == 4:
+            while self.current_target == old_target:
+                self.current_target = random.choice(self.available_notes)
+            # current_target is (note, string)
+        else:
+            while self.current_target == old_target:
+                self.current_target = random.choice(self.available_notes)
         self.stats['total_notes'] += 1
         self.start_time = time.time()
         self.update_display()
@@ -88,13 +140,16 @@ class NoteGame:
         """Update the game display"""
         if not self.screen:
             return
-            
         # Clear specific lines
         for i in range(4):
             self.screen.addstr(i, 0, " " * 50)
-            
         # Update display with current game state
-        self.screen.addstr(0, 0, f"TARGET: {self.current_target or '---'}")
+        if self.level == 4 and self.current_target:
+            note, string = self.current_target
+            target_str = f"{note} on {string} string"
+        else:
+            target_str = f"{self.current_target or '---'}"
+        self.screen.addstr(0, 0, f"TARGET: {target_str}")
         self.screen.addstr(1, 0, f"PLAYING: {self.current_note or '---'}")
         self.screen.addstr(2, 0, f"TIME REMAINING: {int(self.time_remaining)} seconds")
         self.screen.addstr(3, 0, "----------------------------------------")
@@ -215,17 +270,40 @@ class NoteGame:
 
 @click.command()
 @click.option('--debug', is_flag=True, help='Show debug information')
-@click.option('--time', '-t', default=60, help='Game duration in seconds')
-def main(debug, time):
+@click.option('--duration', '-t', default=60, help='Game duration in seconds')
+@click.option('--level', '-l', default=1, help='Game level (1=open strings only)')
+def main(debug, duration, level):
     """Start the note guessing game"""
+    import os
+    prev_duration = None
+    duration_file = os.path.join(os.path.dirname(__file__), '.last_game_duration')
+    if os.path.exists(duration_file):
+        try:
+            with open(duration_file, 'r') as f:
+                prev_duration = float(f.read().strip())
+        except Exception:
+            prev_duration = None
+    if prev_duration is not None:
+        print(f"Previous game duration: {prev_duration:.2f} seconds")
+    game = None
     try:
-        game = NoteGame(debug=debug)
-        game.start_game(duration=time)
+        game = NoteGame(debug=debug, level=level)
+        start_time = time.time()
+        game.start_game(duration=duration)
+        end_time = time.time()
+        played_duration = end_time - start_time
+        # Save this duration for next time
+        try:
+            with open(duration_file, 'w') as f:
+                f.write(str(played_duration))
+        except Exception as e:
+            print(f"Warning: Could not save last game duration: {e}")
     except Exception as e:
         # Make sure terminal is restored if there's an error
-        curses.nocbreak()
-        curses.echo()
-        curses.endwin()
+        if game is not None and getattr(game, 'screen', None) is not None:
+            curses.nocbreak()
+            curses.echo()
+            curses.endwin()
         print(f"Error: {e}")
 
 if __name__ == '__main__':

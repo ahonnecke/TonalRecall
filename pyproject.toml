@@ -1,7 +1,8 @@
 [project]
-name = "Tonal Recall"
+name = "TonalRecall"
 version = "0.1.0"
 description = "A bass guitar learning game using frequency detection"
+requires-python = ">=3.11"
 dependencies = [
     "sounddevice",
     "numpy",
@@ -19,3 +20,4 @@ packages = ["."]
 
 [project.scripts]
 go = "test_frequency:main"
+tonal-recall = "tonal_recall.note_game:main"
