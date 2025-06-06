@@ -113,12 +113,9 @@ class NoteGame:
             return
         # For level 4, check both note and string
         if self.level == 4:
-            # Assume note.name is something like 'A', 'A#', etc.
-            # and note.string is the string name (e.g., 'E', 'A', etc.)
-            # If note.string is not available, you may need to adapt this logic
+            # Level 4: current_target is a (note, string) tuple
             played_note = note.name
             played_string = getattr(note, "string", None)
-            # Record that this note was played
             key = (played_note, played_string)
             if key in self.stats["notes_played"]:
                 self.stats["notes_played"][key] += 1
@@ -128,31 +125,27 @@ class NoteGame:
                 f"{played_note} on {played_string}" if played_string else played_note
             )
             self._needs_update = True
-        # Check if this is the target note/string
-        target_note, target_string = self.current_target
-        if played_note == target_note and played_string == target_string:
-            elapsed = time.time() - self.start_time
-            self.stats["times"].append(elapsed)
-            self.stats["correct_notes"] += 1
-            self.pick_new_target()
-            self._needs_update = True
+            target_note, target_string = self.current_target
+            if played_note == target_note and played_string == target_string:
+                elapsed = time.time() - self.start_time
+                self.stats["times"].append(elapsed)
+                self.stats["correct_notes"] += 1
+                self.pick_new_target()
+                self._needs_update = True
         else:
-            # Extract just the note letter (A, B, C, etc.)
+            # Other levels: current_target is just a note, any string is valid
             simple_note = note.name[0]
-            # Record that this note was played
             if simple_note in self.stats["notes_played"]:
                 self.stats["notes_played"][simple_note] += 1
             else:
                 self.stats["notes_played"][simple_note] = 1
             self.current_note = note.name
             self._needs_update = True
-        # Check if this is the target note
-        if simple_note == self.current_target:
-            elapsed = time.time() - self.start_time
-            self.stats["times"].append(elapsed)
-            self.stats["correct_notes"] += 1
-            self.pick_new_target()
-            self._needs_update = True
+            if simple_note == self.current_target:
+                elapsed = time.time() - self.start_time
+                self.stats["times"].append(elapsed)
+                self.stats["correct_notes"] += 1
+                self.pick_new_target()
 
     def pick_new_target(self):
         """Pick a new target note (or note+string for level 4)"""
