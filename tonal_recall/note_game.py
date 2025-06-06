@@ -17,18 +17,100 @@ class NoteGameUI:
     def cleanup(self):
         pass
 
+import pygame
+
 class PygameUI(NoteGameUI):
     def __init__(self):
-        pass
+        self.screen = None
+        self.width = 800
+        self.height = 600
+        self.bg_color = (30, 30, 30)
+        self.text_color = (255, 255, 0)
+        self.font = None
+        self.timer_font = None
+        self.note_font = None
+        self.initialized = False
     def init_screen(self):
-        print("[PygameUI] Pygame UI not implemented yet. This is a stub.")
-        return None
+        pygame.init()
+        self.screen = pygame.display.set_mode((self.width, self.height))
+        pygame.display.set_caption("Tonal Recall - Pygame UI")
+        self.font = pygame.font.SysFont(None, 120)
+        self.timer_font = pygame.font.SysFont(None, 48)
+        self.note_font = pygame.font.SysFont(None, 64)
+        self.initialized = True
+        return self.screen
     def update_display(self, game):
-        pass
+        if not self.initialized or not self.screen:
+            return
+        self.screen.fill(self.bg_color)
+        # Timer at the top
+        timer_str = f"Time remaining: {int(game.time_remaining)}s"
+        timer_surface = self.timer_font.render(timer_str, True, (200, 200, 255))
+        timer_rect = timer_surface.get_rect(center=(self.width//2, 40))
+        self.screen.blit(timer_surface, timer_rect)
+        # Target note in the center
+        note = game.current_target
+        if note:
+            if game.level == 4 and isinstance(note, tuple):
+                note_str = f"{note[0]} on {note[1]}"
+            else:
+                note_str = str(note)
+            text_surface = self.font.render(note_str, True, self.text_color)
+            text_rect = text_surface.get_rect(center=(self.width//2, self.height//2))
+            self.screen.blit(text_surface, text_rect)
+        # Last detected note at the bottom
+        if getattr(game, 'current_note', None):
+            played_str = f"You played: {game.current_note}"
+            played_surface = self.note_font.render(played_str, True, (180, 255, 180))
+            played_rect = played_surface.get_rect(center=(self.width//2, self.height - 60))
+            self.screen.blit(played_surface, played_rect)
+        pygame.display.flip()
     def show_stats(self, game):
-        print("[PygameUI] show_stats called (stub)")
+        # Display stats in the pygame window until the user closes it
+        if not self.initialized or not self.screen:
+            return
+        self.screen.fill((20, 20, 20))
+        stats = game.stats
+        lines = [
+            "===== Game Statistics =====",
+            f"Notes attempted: {stats['total_notes']}",
+            f"Notes completed: {stats['correct_notes']}",
+        ]
+        if stats['times']:
+            avg_time = sum(stats['times']) / len(stats['times'])
+            min_time = min(stats['times']) if stats['times'] else 0
+            max_time = max(stats['times']) if stats['times'] else 0
+            lines.append(f"Average time per note: {avg_time:.2f} seconds")
+            lines.append(f"Fastest note: {min_time:.2f} seconds")
+            lines.append(f"Slowest note: {max_time:.2f} seconds")
+        lines.append("")
+        lines.append("Notes played:")
+        for note, count in sorted(stats['notes_played'].items()):
+            lines.append(f"  {note}: {count} times")
+        lines.append("")
+        lines.append("Thank you for playing!")
+        # Render lines
+        font = pygame.font.SysFont(None, 48)
+        y = 40
+        for line in lines:
+            surf = font.render(line, True, (255,255,255))
+            rect = surf.get_rect(center=(self.width//2, y))
+            self.screen.blit(surf, rect)
+            y += 50
+        pygame.display.flip()
+        # Wait for user to close window
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    waiting = False
+            pygame.time.wait(100)
+        self.cleanup()
+
     def cleanup(self):
-        pass
+        if self.initialized:
+            pygame.quit()
+            self.initialized = False
 
 class CursesUI(NoteGameUI):
     def __init__(self):
@@ -218,10 +300,13 @@ class NoteGame:
                 self.current_target = random.choice(self.available_notes)
         self.stats['total_notes'] += 1
         self.start_time = time.time()
-        self.update_display()
+        # Only update display immediately if using CursesUI
+        if self.ui and isinstance(self.ui, CursesUI):
+            self.update_display()
     
     def update_display(self):
         """Update the game display"""
+        # Only safe to call from main thread! (CursesUI: always, PygameUI: only from main loop)
         if self.ui:
             self.ui.update_display(self)
     
@@ -340,14 +425,80 @@ def main(debug, duration, level, ui):
         if ui == 'curses':
             game.ui = CursesUI()
             game.screen = game.ui.init_screen()
+            start_time = time.time()
+            game.start_game(duration=duration)
+            end_time = time.time()
         elif ui == 'pygame':
             game.ui = PygameUI()
             game.ui.init_screen()
-            print("Pygame UI selected. Stub only. Exiting.")
-            return
-        start_time = time.time()
-        game.start_game(duration=duration)
-        end_time = time.time()
+            duration_secs = duration
+            game.stats = {
+                'total_notes': 0,
+                'correct_notes': 0,
+                'times': [],
+                'notes_played': {}
+            }
+            game.running = True
+            game.time_remaining = duration_secs
+            game.pick_new_target()
+            game.ui.update_display(game)
+            # Start note detector with callback
+            def pygame_note_callback(note, signal_strength):
+                # Only update game state, never call pygame UI methods from this thread!
+                if not game.running or not game.current_target:
+                    return
+                needs_update = False
+                if game.level == 4:
+                    played_note = note.name
+                    played_string = getattr(note, 'string', None)
+                    key = (played_note, played_string)
+                    game.stats['notes_played'][key] = game.stats['notes_played'].get(key, 0) + 1
+                    game.current_note = f"{played_note} on {played_string}" if played_string else played_note
+                    target_note, target_string = game.current_target
+                    if played_note == target_note and played_string == target_string:
+                        elapsed = time.time() - game.start_time
+                        game.stats['times'].append(elapsed)
+                        game.stats['correct_notes'] += 1
+                        game.pick_new_target()
+                        needs_update = True
+                else:
+                    simple_note = note.name[0]
+                    game.stats['notes_played'][simple_note] = game.stats['notes_played'].get(simple_note, 0) + 1
+                    game.current_note = note.name
+                    if simple_note == game.current_target:
+                        elapsed = time.time() - game.start_time
+                        game.stats['times'].append(elapsed)
+                        game.stats['correct_notes'] += 1
+                        game.pick_new_target()
+                        needs_update = True
+                # Always update display to show last played note
+                game._needs_update = True
+            if not game.detector.start(callback=pygame_note_callback):
+                print("Failed to start note detector!")
+                return
+            start_time = time.time()
+            end_time = start_time + duration_secs
+            last_second = int(duration_secs)
+            try:
+                while time.time() < end_time and game.running:
+                    game.time_remaining = max(0, end_time - time.time())
+                    current_second = int(game.time_remaining)
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            game.running = False
+                            break
+                    if getattr(game, '_needs_update', False) or current_second != last_second:
+                        game.ui.update_display(game)
+                        last_second = current_second
+                        game._needs_update = False
+                    pygame.time.wait(50)
+            except KeyboardInterrupt:
+                pass
+            game.running = False
+            game.detector.stop()
+            game.ui.show_stats(game)
+            game.ui.cleanup()
+            end_time = time.time()
         played_duration = end_time - start_time
         # Save this duration for next time
         try:
