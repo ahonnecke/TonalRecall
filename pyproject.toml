@@ -1,5 +1,5 @@
 [project]
-name = "guitar_learning_game"
+name = "Tonal Recall"
 version = "0.1.0"
 description = "A bass guitar learning game using frequency detection"
 dependencies = [
@@ -7,6 +7,7 @@ dependencies = [
     "numpy",
     "aubio",
     "pygame",
+    "click>=8.2.1",
 ]
 
 [build-system]
@@ -15,3 +16,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]
+
+[project.scripts]
+go = "test_frequency:main"
