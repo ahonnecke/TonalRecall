@@ -3,10 +3,10 @@
 import time
 import random
 import click
-import curses
 import signal
 from typing import List, Dict
 from note_detector import NoteDetector
+from ui import NoteGameUI, CursesUI, PygameUI
 import pyfiglet
 
 class NoteGameUI:
