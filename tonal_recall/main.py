@@ -5,10 +5,10 @@ import random
 import click
 import signal
 from typing import List, Dict
-from note_detector import NoteDetector
-from ui import NoteGameUI, CursesUI, PygameUI
+from tonal_recall.note_detector import NoteDetector
+from tonal_recall.ui import NoteGameUI, CursesUI, PygameUI
 import pyfiglet
-from note_game_core import NoteGame
+from tonal_recall.note_game_core import NoteGame
 
 
 class NoteGameUI:
