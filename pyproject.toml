@@ -9,6 +9,7 @@ dependencies = [
     "aubio",
     "pygame",
     "click>=8.2.1",
+    "pyfiglet>=1.0.3",
 ]
 
 [build-system]

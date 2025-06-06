@@ -7,6 +7,7 @@ import curses
 import signal
 from typing import List, Dict
 from note_detector import NoteDetector
+import pyfiglet
 
 class NoteGame:
     """A simple game to practice playing notes on a guitar or bass"""
@@ -140,19 +141,40 @@ class NoteGame:
         """Update the game display"""
         if not self.screen:
             return
-        # Clear specific lines
-        for i in range(4):
-            self.screen.addstr(i, 0, " " * 50)
-        # Update display with current game state
-        if self.level == 4 and self.current_target:
-            note, string = self.current_target
-            target_str = f"{note} on {string} string"
-        else:
-            target_str = f"{self.current_target or '---'}"
-        self.screen.addstr(0, 0, f"TARGET: {target_str}")
-        self.screen.addstr(1, 0, f"PLAYING: {self.current_note or '---'}")
-        self.screen.addstr(2, 0, f"TIME REMAINING: {int(self.time_remaining)} seconds")
-        self.screen.addstr(3, 0, "----------------------------------------")
+        self.screen.clear()
+
+        # Show time remaining
+        self.screen.addstr(0, 0, f"Time remaining: {int(self.time_remaining)}s")
+
+        # Show current target note in large ASCII art, centered
+        if self.current_target:
+            if self.level == 4 and isinstance(self.current_target, tuple):
+                note_str = f"{self.current_target[0]} on {self.current_target[1]}"
+            else:
+                note_str = str(self.current_target)
+            self.screen.addstr(2, 0, "Play this note:")
+
+            # Render large ASCII art for the note
+            figlet_text = pyfiglet.figlet_format(note_str)
+            lines = figlet_text.splitlines()
+            height, width = self.screen.getmaxyx()
+            # Calculate vertical start to center
+            start_y = max(4, (height // 2) - (len(lines) // 2))
+            # Calculate horizontal start to center each line
+            for i, line in enumerate(lines):
+                start_x = max(0, (width // 2) - (len(line) // 2))
+                if start_y + i < height:
+                    try:
+                        self.screen.addstr(start_y + i, start_x, line)
+                    except curses.error:
+                        pass  # If line doesn't fit, skip
+
+        # Show last detected note
+        if self.current_note:
+            self.screen.addstr(height - 4, 0, f"You played: {self.current_note}")
+
+        # Show stats
+        self.screen.addstr(height - 2, 0, f"Correct: {self.stats['correct_notes']} / {self.stats['total_notes']}")
         self.screen.refresh()
     
     def start_game(self, duration=60):
