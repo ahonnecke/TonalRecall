@@ -17,6 +17,19 @@ class NoteGameUI:
     def cleanup(self):
         pass
 
+class PygameUI(NoteGameUI):
+    def __init__(self):
+        pass
+    def init_screen(self):
+        print("[PygameUI] Pygame UI not implemented yet. This is a stub.")
+        return None
+    def update_display(self, game):
+        pass
+    def show_stats(self, game):
+        print("[PygameUI] show_stats called (stub)")
+    def cleanup(self):
+        pass
+
 class CursesUI(NoteGameUI):
     def __init__(self):
         self.screen = None
@@ -306,7 +319,8 @@ class NoteGame:
 @click.option('--debug', is_flag=True, help='Show debug information')
 @click.option('--duration', '-t', default=60, help='Game duration in seconds')
 @click.option('--level', '-l', default=1, help='Game level (1=open strings only)')
-def main(debug, duration, level):
+@click.option('--ui', type=click.Choice(['curses', 'pygame']), default='curses', help='UI backend to use')
+def main(debug, duration, level, ui):
     """Start the note guessing game"""
     import os
     prev_duration = None
@@ -322,6 +336,15 @@ def main(debug, duration, level):
     game = None
     try:
         game = NoteGame(debug=debug, level=level)
+        # Select UI backend
+        if ui == 'curses':
+            game.ui = CursesUI()
+            game.screen = game.ui.init_screen()
+        elif ui == 'pygame':
+            game.ui = PygameUI()
+            game.ui.init_screen()
+            print("Pygame UI selected. Stub only. Exiting.")
+            return
         start_time = time.time()
         game.start_game(duration=duration)
         end_time = time.time()
