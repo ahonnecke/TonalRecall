@@ -8,15 +8,16 @@ from tonal_recall.ui import NoteGameUI, CursesUI, PygameUI
 class NoteGame:
     """A simple game to practice playing notes on a guitar or bass"""
 
-    def __init__(self, debug=False, level=1):
-        """Initialize the game
+    def __init__(self, debug=False, level=1, note_detector=None):
+        """Initialize the game. Optionally inject a note_detector for testability.
 
         Args:
             debug: Whether to show debug information
             level: The game level (affects possible notes)
+            note_detector: Optional, a NoteDetector-like instance for dependency injection/testing
         """
         self.debug = debug
-        self.detector = NoteDetector(debug=debug)
+        self.detector = note_detector if note_detector is not None else NoteDetector(debug=debug)
         self.running = False
         self.current_target = None
         self.current_note = None  # Track the current note being played
