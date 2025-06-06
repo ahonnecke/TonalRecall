@@ -61,7 +61,6 @@ class CursesUI(NoteGameUI):
     def show_stats(self, game):
         self.cleanup()
         print("\n===== Game Statistics =====")
-        print(f"Notes attempted: {game.stats['total_notes']}")
         print(f"Notes completed: {game.stats['correct_notes']}")
         if game.stats["times"]:
             avg_time = sum(game.stats["times"]) / len(game.stats["times"])
@@ -138,7 +137,6 @@ class PygameUI(NoteGameUI):
         stats = game.stats
         lines = [
             "===== Game Statistics =====",
-            f"Notes attempted: {stats['total_notes']}",
             f"Notes completed: {stats['correct_notes']}",
         ]
         avg_time = None
