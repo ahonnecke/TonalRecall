@@ -23,6 +23,3 @@ packages = ["."]
 [project.scripts]
 go = "test_frequency:main"
 tonal-recall = "tonal_recall.main:main"
-
-[tool.uv.scripts]
-test = "PYTHONPATH=./src pytest"

@@ -68,6 +68,22 @@ class PygameUI(NoteGameUI):
                 center=(self.width // 2, self.height // 2)
             )
             self.screen.blit(text_surface, text_rect)
+        # --- Current Note Display ---
+        # Try to get the latest stable note (if available)
+        current_note = getattr(game, "detector", None)
+        stable_note = None
+        if current_note and hasattr(current_note, "stable_note"):
+            stable_note = current_note.stable_note
+        # Fallback to game.current_note if set
+        if stable_note is not None:
+            note_display = f"Current Note: {stable_note.name} ({stable_note.frequency:.1f} Hz)"
+        elif getattr(game, "current_note", None):
+            note_display = f"Current Note: {game.current_note}"
+        else:
+            note_display = "No note detected"
+        note_surface = self.note_font.render(note_display, True, (255, 220, 100))
+        note_rect = note_surface.get_rect(center=(self.width // 2, self.height - 120))
+        self.screen.blit(note_surface, note_rect)
         # Last detected note at the bottom
         if getattr(game, "current_note", None):
             played_str = f"You played: {game.current_note}"
@@ -157,6 +173,23 @@ class CursesUI(NoteGameUI):
                         screen.addstr(start_y + i, start_x, line)
                     except curses.error:
                         pass
+        # --- Current Note Display ---
+        current_note = getattr(game, "detector", None)
+        stable_note = None
+        if current_note and hasattr(current_note, "stable_note"):
+            stable_note = current_note.stable_note
+        # Fallback to game.current_note if set
+        if stable_note is not None:
+            note_display = f"Current Note: {stable_note.name} ({stable_note.frequency:.1f} Hz)"
+        elif getattr(game, "current_note", None):
+            note_display = f"Current Note: {game.current_note}"
+        else:
+            note_display = "No note detected"
+        # Place above the last played note
+        try:
+            screen.addstr(height - 6, 0, note_display)
+        except Exception:
+            pass
         if game.current_note:
             screen.addstr(height - 4, 0, f"You played: {game.current_note}")
         screen.addstr(
