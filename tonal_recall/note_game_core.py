@@ -1,8 +1,13 @@
 import time
 import random
+import logging
 from tonal_recall.note_detector import NoteDetector
 import signal
 from tonal_recall.ui import CursesUI
+from tonal_recall.note_matcher import NoteMatcher
+
+game_core_logger = logging.getLogger("tonal_recall.note_game_core")
+game_core_logger.setLevel(logging.INFO)  # Set to DEBUG for verbose output
 
 
 class NoteGame:
@@ -41,21 +46,16 @@ class NoteGame:
             3: [
                 "A",
                 "A#",
-                "Bb",
                 "B",
                 "C",
                 "C#",
-                "Db",
                 "D",
                 "D#",
-                "Eb",
                 "E",
                 "F",
                 "F#",
-                "Gb",
                 "G",
                 "G#",
-                "Ab",
             ],  # Chromatic scale with sharps and flats
             4: None,  # Level 4: specific note on a specific string (implemented below)
             # Level 5: specific note at a specific fret (future)
@@ -73,21 +73,16 @@ class NoteGame:
         self.chromatic_notes = [
             "A",
             "A#",
-            "Bb",
             "B",
             "C",
             "C#",
-            "Db",
             "D",
             "D#",
-            "Eb",
             "E",
             "F",
             "F#",
-            "Gb",
             "G",
             "G#",
-            "Ab",
         ]
         if self.level == 4:
             self.available_notes = [
@@ -136,14 +131,25 @@ class NoteGame:
                 self._needs_update = True
         else:
             # Other levels: current_target is just a note, any string is valid
-            simple_note = note.name[0]
-            if simple_note in self.stats["notes_played"]:
-                self.stats["notes_played"][simple_note] += 1
+            def extract_note_base(note_name):
+                # Extracts note letter and accidental (e.g. 'F#') from 'F#1'
+                if len(note_name) > 1 and note_name[1] in ["#", "b"]:
+                    return note_name[:2]
+                return note_name[:1]
+
+            note_base = extract_note_base(note.name)
+            target_base = extract_note_base(self.current_target)
+            game_core_logger.debug(
+                f"[MATCH DEBUG] Target: {self.current_target}, Detected: {note.name}, Note base: {note_base}, Target base: {target_base}"
+            )
+            if note_base in self.stats["notes_played"]:
+                self.stats["notes_played"][note_base] += 1
             else:
-                self.stats["notes_played"][simple_note] = 1
+                self.stats["notes_played"][note_base] = 1
             self.current_note = note.name
             self._needs_update = True
-            if simple_note == self.current_target:
+
+            if NoteMatcher.match(self.current_target, note.name):
                 elapsed = time.time() - self.start_time
                 self.stats["times"].append(elapsed)
                 self.stats["correct_notes"] += 1

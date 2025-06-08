@@ -62,26 +62,26 @@ class CursesUI(NoteGameUI):
         self.cleanup()
         print(f"Notes completed: {game.stats['correct_notes']}")
         if game.stats["times"]:
-            avg_time = sum(game.stats["times"]) / len(game.stats["times"])
-            min_time = min(game.stats["times"]) if game.stats["times"] else 0
-            max_time = max(game.stats["times"]) if game.stats["times"] else 0
-            print(f"Average time per note: {avg_time:.2f} seconds")
-            print(f"Fastest note: {min_time:.2f} seconds")
-            print(f"Slowest note: {max_time:.2f} seconds")
+            avg_time = sum(game.stats["times"]) / len(game.stats["times"]) if game.stats["times"] else None
+            min_time = min(game.stats["times"]) if game.stats["times"] else None
+            max_time = max(game.stats["times"]) if game.stats["times"] else None
+            print(f"Average time per note: {avg_time:.2f} seconds" if avg_time is not None else "Average time per note: N/A")
+            print(f"Fastest note: {min_time:.2f} seconds" if min_time is not None else "Fastest note: N/A")
+            print(f"Slowest note: {max_time:.2f} seconds" if max_time is not None else "Slowest note: N/A")
         if persistent_stats:
             print("\n--- All-Time Stats ---")
-            print(
-                f"High Score (Notes/sec): {persistent_stats.get('high_score_nps', 0):.2f}"
-            )
+            high_score = persistent_stats.get('high_score_nps')
+            print(f"High Score (Notes/sec): {high_score:.2f}" if high_score is not None else "High Score (Notes/sec): N/A")
             fastest = persistent_stats.get("fastest_note")
-            if fastest is not None:
-                print(f"Fastest Note Ever: {fastest:.2f} seconds")
+            print(f"Fastest Note Ever: {fastest:.2f} seconds" if fastest is not None else "Fastest Note Ever: N/A")
             if persistent_stats.get("history"):
                 print("Recent Sessions:")
                 for entry in persistent_stats["history"][-5:]:
-                    print(
-                        f"  NPS: {entry['nps']:.2f}, Fastest: {entry['fastest']:.2f} s"
-                    )
+                    nps = entry.get('nps')
+                    fastest_val = entry.get('fastest')
+                    nps_str = f"{nps:.2f}" if nps is not None else "N/A"
+                    fastest_str = f"{fastest_val:.2f}" if fastest_val is not None else "N/A"
+                    print(f"  NPS: {nps_str}, Fastest: {fastest_str} s")
         print("\nThank you for playing!")
 
     def cleanup(self):

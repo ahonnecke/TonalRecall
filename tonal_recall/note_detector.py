@@ -304,7 +304,7 @@ class NoteDetector:
         half_steps = round(12 * np.log2(freq / 440.0))
 
         # Calculate octave (A4 is in octave 4)
-        octave = 4 + (half_steps + 9) // 12
+        octave = 3 + (half_steps + 9) // 12
 
         # Get note name (0 = A, 1 = A#, etc.)
         notes = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
