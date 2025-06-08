@@ -5,6 +5,7 @@ import click
 from tonal_recall.ui import NoteGameUI, CursesUI, PygameUI
 import pyfiglet
 from tonal_recall.note_game_core import NoteGame
+from tonal_recall.stats import update_stats, load_stats
 
 
 class NoteGameUI:
@@ -92,16 +93,18 @@ class PygameUI(NoteGameUI):
             self.screen.blit(played_surface, played_rect)
         pygame.display.flip()
 
-    def show_stats(self, game):
+    def show_stats(self, game, persistent_stats=None):
         # Display stats in the pygame window until the user closes it
         if not self.initialized or not self.screen:
             return
         self.screen.fill((20, 20, 20))
         stats = game.stats
         lines = [
-            "===== Game Statistics =====",
             f"Notes completed: {stats['correct_notes']}",
         ]
+        avg_time = None
+        min_time = None
+        max_time = None
         if stats["times"]:
             avg_time = sum(stats["times"]) / len(stats["times"])
             min_time = min(stats["times"]) if stats["times"] else 0
@@ -109,7 +112,21 @@ class PygameUI(NoteGameUI):
             lines.append(f"Average time per note: {avg_time:.2f} seconds")
             lines.append(f"Fastest note: {min_time:.2f} seconds")
             lines.append(f"Slowest note: {max_time:.2f} seconds")
-        lines.append("")
+        # Add persistent stats
+        if persistent_stats:
+            lines.append("--- All-Time Stats ---")
+            lines.append(
+                f"High Score (Notes/sec): {persistent_stats.get('high_score_nps', 0):.2f}"
+            )
+            fastest = persistent_stats.get("fastest_note")
+            if fastest is not None:
+                lines.append(f"Fastest Note Ever: {fastest:.2f} seconds")
+            if persistent_stats.get("history"):
+                lines.append("Recent Sessions:")
+                for entry in persistent_stats["history"][-5:]:
+                    lines.append(
+                        f"  NPS: {entry['nps']:.2f}, Fastest: {entry['fastest']:.2f} s"
+                    )
         lines.append("")
         lines.append("Thank you for playing!")
         # Render lines
@@ -199,9 +216,8 @@ class CursesUI(NoteGameUI):
         )
         screen.refresh()
 
-    def show_stats(self, game):
+    def show_stats(self, game, persistent_stats=None):
         self.cleanup()
-        print("\n===== Game Statistics =====")
         print(f"Notes completed: {game.stats['correct_notes']}")
         if game.stats["times"]:
             avg_time = sum(game.stats["times"]) / len(game.stats["times"])
@@ -338,16 +354,24 @@ def main(debug, duration, level, ui):
                 pass
             game.running = False
             game.detector.stop()
-            game.ui.show_stats(game)
-            game.ui.cleanup()
             end_time = time.time()
-        played_duration = end_time - start_time
-        # Save this duration for next time
-        try:
-            with open(duration_file, "w") as f:
-                f.write(str(played_duration))
-        except Exception as e:
-            print(f"Warning: Could not save last game duration: {e}")
+            played_duration = end_time - start_time
+            # Compute stats
+            correct_notes = game.stats.get("correct_notes", 0)
+            nps = correct_notes / played_duration if played_duration > 0 else 0
+            fastest = min(game.stats["times"]) if game.stats["times"] else None
+            # Update persistent stats
+            persistent_stats, _ = update_stats(nps, fastest)
+            # Pass persistent stats to UI
+            if hasattr(game.ui, "show_stats"):
+                game.ui.show_stats(game, persistent_stats)
+            game.ui.cleanup()
+            # Save this duration for next time
+            try:
+                with open(duration_file, "w") as f:
+                    f.write(str(played_duration))
+            except Exception as e:
+                print(f"Warning: Could not save last game duration: {e}")
     except Exception as e:
         # Make sure UI is restored if there's an error
         if game is not None and getattr(game, "ui", None) is not None:
