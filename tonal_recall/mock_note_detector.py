@@ -1,5 +1,6 @@
 class MockNoteDetector:
     """A mock detector for unit tests. Allows manual triggering of note events."""
+
     def __init__(self):
         self.callback = None
         self.is_running = False

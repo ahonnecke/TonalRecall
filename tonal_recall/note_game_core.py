@@ -2,8 +2,7 @@ import time
 import random
 from tonal_recall.note_detector import NoteDetector
 import signal
-import curses
-from tonal_recall.ui import NoteGameUI, CursesUI, PygameUI
+from tonal_recall.ui import CursesUI
 
 
 class NoteGame:

@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 
 import time
-import random
 import click
-import signal
-from typing import List, Dict
-from tonal_recall.note_detector import NoteDetector
 from tonal_recall.ui import NoteGameUI, CursesUI, PygameUI
 import pyfiglet
 from tonal_recall.note_game_core import NoteGame
@@ -76,7 +72,9 @@ class PygameUI(NoteGameUI):
             stable_note = current_note.stable_note
         # Fallback to game.current_note if set
         if stable_note is not None:
-            note_display = f"Current Note: {stable_note.name} ({stable_note.frequency:.1f} Hz)"
+            note_display = (
+                f"Current Note: {stable_note.name} ({stable_note.frequency:.1f} Hz)"
+            )
         elif getattr(game, "current_note", None):
             note_display = f"Current Note: {game.current_note}"
         else:
@@ -180,7 +178,9 @@ class CursesUI(NoteGameUI):
             stable_note = current_note.stable_note
         # Fallback to game.current_note if set
         if stable_note is not None:
-            note_display = f"Current Note: {stable_note.name} ({stable_note.frequency:.1f} Hz)"
+            note_display = (
+                f"Current Note: {stable_note.name} ({stable_note.frequency:.1f} Hz)"
+            )
         elif getattr(game, "current_note", None):
             note_display = f"Current Note: {game.current_note}"
         else:
@@ -222,7 +222,9 @@ class CursesUI(NoteGameUI):
 
 
 @click.command()
-@click.option("--debug", is_flag=True, help="Show debug information")
+@click.option(
+    "--debug", default=0, type=int, help="Debug level (0=off, 1=basic, 2=audio data)"
+)
 @click.option("--duration", "-t", default=60, help="Game duration in seconds")
 @click.option("--level", "-l", default=1, help="Game level (1=open strings only)")
 @click.option(

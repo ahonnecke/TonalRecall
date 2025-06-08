@@ -54,7 +54,7 @@ This project is a **real-time frequency-based game control system** that:
 ```
 
 ## 2. Audio Processing Details
-The core requirement is **low-latency frequency analysis**.  
+The core requirement is **low-latency frequency analysis**.
 Instead of **FFT**, we use **Sliding DFT (Goertzel’s Algorithm)**, which:
 - Computes frequency components **incrementally** instead of processing entire buffers.
 - Reduces latency **from ~23ms (FFT) to ~11ms (Sliding DFT)** at a 44.1kHz sample rate.
@@ -84,16 +84,16 @@ use pyo3::prelude::*;
 fn goertzel(samples: &[f32], sample_rate: usize, target_freq: f32) -> f32 {
     let k = (0.5 + (samples.len() as f32 * target_freq / sample_rate as f32)).floor();
     let omega = (2.0 * std::f32::consts::PI * k / samples.len() as f32).cos();
-    
+
     let mut s_prev = 0.0;
     let mut s_prev2 = 0.0;
-    
+
     for &sample in samples {
         let s = sample + omega * s_prev - s_prev2;
         s_prev2 = s_prev;
         s_prev = s;
     }
-    
+
     (s_prev2.powi(2) + s_prev.powi(2) - omega * s_prev * s_prev2).sqrt()
 }
 
@@ -106,7 +106,7 @@ fn analyze_audio(samples: Vec<f32>, sample_rate: usize) -> PyResult<f32> {
     for i in 1..samples.len() / 2 {
         let freq = i as f32 * freq_resolution;
         let power = goertzel(&samples, sample_rate, freq);
-        
+
         if power > max_power {
             max_power = power;
             dominant_freq = freq;
@@ -177,7 +177,7 @@ def _ready():
 def update_visuals():
     global current_freq
     node = get_node("/root/Game/VisualElement")
-    
+
     if current_freq < 300:
         node.modulate = Color(1, 0, 0)  # Red for low frequencies
     elif current_freq < 600:
@@ -248,12 +248,12 @@ def audio_callback(indata, frames, time, status):
     if status and status.input_overflow:
         print("\rInput overflow", end="")
         return
-        
+
     # Get mono audio data and process it directly
     audio_data = indata[:, 0] if indata.shape[1] > 0 else indata.flatten()
     pitch = pitch_detector(audio_data.astype(np.float32))[0]
     confidence = pitch_detector.get_confidence()
-    
+
     if pitch > 0 and confidence > 0.3:
         note = get_note_name(pitch)
         print(f"\rFrequency: {pitch:.1f} Hz | Note: {note}", end="")

@@ -5,18 +5,20 @@ import threading
 import queue
 import time
 
+
 def list_audio_devices():
     """List all available audio input devices"""
     try:
         devices = sd.query_devices()
         input_devices = []
         for i, device in enumerate(devices):
-            if device['max_input_channels'] > 0:
-                input_devices.append((i, device['name']))
+            if device["max_input_channels"] > 0:
+                input_devices.append((i, device["name"]))
         return input_devices
     except Exception as e:
         print(f"Error listing audio devices: {e}")
         return []
+
 
 class BassAudioDetector:
     def __init__(self, sample_rate=44100, buffer_size=1024, device=None):
@@ -25,7 +27,7 @@ class BassAudioDetector:
         self.audio_queue = queue.Queue()
         self.running = False
         self.error = None
-        
+
         # Set input device with error handling
         try:
             self.device = device
@@ -33,39 +35,44 @@ class BassAudioDetector:
                 # Try to find Rocksmith cable
                 devices = sd.query_devices()
                 for i, dev in enumerate(devices):
-                    if dev['max_input_channels'] > 0 and 'rocksmith' in dev['name'].lower():
+                    if (
+                        dev["max_input_channels"] > 0
+                        and "rocksmith" in dev["name"].lower()
+                    ):
                         self.device = i
                         print(f"Found Rocksmith cable: {dev['name']}")
                         break
-            
+
             # Validate device
             if self.device is not None:
                 device_info = sd.query_devices(self.device)
-                if device_info['max_input_channels'] == 0:
-                    raise ValueError(f"Selected device {self.device} has no input channels")
-                
+                if device_info["max_input_channels"] == 0:
+                    raise ValueError(
+                        f"Selected device {self.device} has no input channels"
+                    )
+
         except Exception as e:
             self.error = f"Error initializing audio device: {e}"
             print(self.error)
             return
-        
+
         try:
             # Initialize aubio pitch detection
             self.pitch_detector = aubio.pitch(
-                method="yinfft",
+                method="yin",
                 buf_size=self.buffer_size,
                 hop_size=self.buffer_size,
-                samplerate=self.sample_rate
+                samplerate=self.sample_rate,
             )
-            
+
             # Set pitch detection tolerance
             self.pitch_detector.set_tolerance(0.8)
-            
+
         except Exception as e:
             self.error = f"Error initializing pitch detector: {e}"
             print(self.error)
             return
-            
+
         # Current detected frequency
         self.current_frequency = 0.0
         self.confidence = 0.0
@@ -85,7 +92,7 @@ class BassAudioDetector:
                 audio_data = self.audio_queue.get(timeout=1.0)
                 pitch = self.pitch_detector(audio_data.astype(np.float32))[0]
                 confidence = self.pitch_detector.get_confidence()
-                
+
                 # Only update if we have a confident pitch detection
                 if confidence > 0.8:
                     self.current_frequency = float(pitch)
@@ -103,26 +110,26 @@ class BassAudioDetector:
         if self.error:
             print(f"Cannot start due to initialization error: {self.error}")
             return False
-            
+
         try:
             self.running = True
             # Start audio processing thread
             self.process_thread = threading.Thread(target=self.process_audio)
             self.process_thread.daemon = True
             self.process_thread.start()
-            
+
             # Start audio input stream with timeout
             self.stream = sd.InputStream(
                 device=self.device,
                 channels=1,
                 samplerate=self.sample_rate,
                 blocksize=self.buffer_size,
-                callback=self.audio_callback
+                callback=self.audio_callback,
             )
             self.stream.start()
             print("Audio detection started")
             return True
-            
+
         except Exception as e:
             self.error = f"Error starting audio detection: {e}"
             print(self.error)
@@ -132,13 +139,13 @@ class BassAudioDetector:
     def stop(self):
         """Stop audio detection"""
         self.running = False
-        if hasattr(self, 'stream'):
+        if hasattr(self, "stream"):
             try:
                 self.stream.stop()
                 self.stream.close()
             except Exception as e:
                 print(f"Error stopping stream: {e}")
-        if hasattr(self, 'process_thread'):
+        if hasattr(self, "process_thread"):
             self.process_thread.join(timeout=1.0)
 
     def get_frequency(self):

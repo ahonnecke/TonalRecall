@@ -4,7 +4,7 @@ import sounddevice as sd
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Optional, Tuple, Dict, List
+from typing import Optional
 
 
 @dataclass
@@ -242,7 +242,7 @@ class NoteDetector:
 
             # Initialize pitch detection
             self.pitch_detector = aubio.pitch(
-                method="yinfft",  # Best for guitar/bass
+                method="yin",  # Best for guitar/bass
                 buf_size=self.buffer_size,
                 hop_size=self.buffer_size,
                 samplerate=self.sample_rate,
@@ -408,7 +408,7 @@ class NoteDetector:
         self._last_stable_note = note_name
         return DetectedNote(note_name, avg_freq, avg_conf, avg_signal, True)
         return DetectedNote(note_name, avg_freq, avg_conf, True)
-    
+
     def _audio_callback(self, indata, frames, stream_time, status):
         """Callback for processing audio data"""
         if status:
@@ -418,15 +418,29 @@ class NoteDetector:
                 return  # Skip processing this buffer on overflow
             elif self.debug:
                 print(f"Status: {status}")
-        
+
         # Get the audio data and check levels
         audio_data = indata[:, 0] if indata.shape[1] > 0 else indata.flatten()
         signal_max = np.max(np.abs(audio_data))
-        
+
+        # Buffer size check: skip if not expected length
+        if len(audio_data) != self.buffer_size:
+            if self.debug:
+                print(
+                    f"Skipping frame: got {len(audio_data)} samples, expected {self.buffer_size}"
+                )
+            return
+
+        # Extra debug: print audio stats if debug==2
+        if self.debug == 2:
+            print(
+                f"[AUDIO DEBUG] min={audio_data.min():.4f} max={audio_data.max():.4f} mean={audio_data.mean():.4f} dtype={audio_data.dtype} first10={audio_data[:10]}"
+            )
+
         # Calculate RMS to get a better signal level measurement
         rms = np.sqrt(np.mean(audio_data**2))
         db = 20 * np.log10(rms) if rms > 0 else -100  # Convert to dB
-        
+
         # Increase noise gate threshold to 0.01
         if signal_max > 0.01:  # Basic noise gate
             try:
@@ -434,94 +448,129 @@ class NoteDetector:
                 raw_pitch = self.pitch_detector(audio_data.astype(np.float32))
                 pitch = raw_pitch[0]  # The frequency in Hz
                 confidence = self.pitch_detector.get_confidence()
-                
+
                 # Apply a window function to reduce spectral leakage
                 window = np.hanning(len(audio_data))
                 windowed_data = audio_data * window
-                
+
                 # Calculate FFT with zero-padding for better frequency resolution
-                n_fft = 4 * len(audio_data)  # Zero-padding for better frequency resolution
+                n_fft = 4 * len(
+                    audio_data
+                )  # Zero-padding for better frequency resolution
                 fft = np.fft.rfft(windowed_data, n=n_fft)
-                fft_freqs = np.fft.rfftfreq(n_fft, 1.0/self.sample_rate)
-                
+                fft_freqs = np.fft.rfftfreq(n_fft, 1.0 / self.sample_rate)
+
                 # Get the magnitude spectrum
                 magnitude = np.abs(fft)
-                
+
                 # Filter to focus on bass/guitar frequency range (30-500 Hz)
                 bass_range = (fft_freqs >= 30) & (fft_freqs <= 500)
                 bass_freqs = fft_freqs[bass_range]
                 bass_magnitude = magnitude[bass_range]
-                
+
                 # Find the dominant frequency in the bass range
                 if len(bass_magnitude) > 0:
                     # Find the strongest peak in the bass range
                     max_idx = np.argmax(bass_magnitude)
                     dom_freq = bass_freqs[max_idx]
-                    
+
                     # Find the closest bass note
-                    closest_note = min(self.STANDARD_NOTES.items(), key=lambda x: abs(x[1] - dom_freq))
+                    closest_note = min(
+                        self.STANDARD_NOTES.items(), key=lambda x: abs(x[1] - dom_freq)
+                    )
                     note_name, note_freq = closest_note
-                    
+
                     # If we're within 5% of a standard note, snap to that frequency
                     if abs(dom_freq - note_freq) / note_freq < 0.05:
                         dom_freq = note_freq
                 else:
                     dom_freq = 0
-                
+
                 if self.debug:
                     current_time = time.strftime("%H:%M:%S")
                     if pitch > 0:
                         note_name = self.get_note_name(pitch)
-                        dom_note = self.get_note_name(dom_freq) if dom_freq > 0 else "---"
-                        print(f"{current_time} | Aubio: {pitch:.1f} Hz ({note_name}) | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}")
+                        dom_note = (
+                            self.get_note_name(dom_freq) if dom_freq > 0 else "---"
+                        )
+                        print(
+                            f"{current_time} | Aubio: {pitch:.1f} Hz ({note_name}) | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}"
+                        )
                     else:
-                        dom_note = self.get_note_name(dom_freq) if dom_freq > 0 else "---"
-                        print(f"{current_time} | Aubio: {pitch:.1f} Hz | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}")
-                
-                # For bass guitar, prioritize FFT analysis which is more reliable for low frequencies
-                # For higher frequencies, aubio might be more accurate
-                detected_freq = dom_freq if 30 < dom_freq < 200 else pitch
-                
-                # If aubio returns 0 or a very high frequency, use the FFT frequency
-                if pitch == 0 or pitch > 1000:
-                    if 30 < dom_freq < 1000:
-                        detected_freq = dom_freq
-                        
+                        dom_note = (
+                            self.get_note_name(dom_freq) if dom_freq > 0 else "---"
+                        )
+                        print(
+                            f"{current_time} | Aubio: {pitch:.1f} Hz | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}"
+                        )
+
+                # Improved pitch selection logic:
+                # Use aubio pitch if confidence is high and pitch is valid, otherwise use FFT
+                CONFIDENCE_THRESHOLD = 0.7  # Can be tuned or made configurable
+                detected_method = None
+                if (
+                    confidence >= CONFIDENCE_THRESHOLD
+                    and 30 < pitch < 1000
+                ):
+                    detected_freq = pitch
+                    detected_method = "aubio"
+                elif 30 < dom_freq < 1000:
+                    detected_freq = dom_freq
+                    detected_method = "fft"
+                else:
+                    detected_freq = 0
+                    detected_method = "none"
+
+                if self.debug:
+                    print(f"[PITCH SELECT] method={detected_method} | conf={confidence:.2f} | aubio={pitch:.1f}Hz | fft={dom_freq:.1f}Hz")
+
                 # If signal is weak (below 0.15), maintain the current stable note
                 # This prevents jumping between notes during decay
                 if signal_max < 0.15 and self.stable_note:
                     detected_freq = self.stable_note.frequency
-                
+
                 # Filter out unreasonable frequencies
-                if detected_freq > 0 and 30 < detected_freq < 1000:  # Reasonable range for guitar/bass
+                if (
+                    detected_freq > 0 and 30 < detected_freq < 1000
+                ):  # Reasonable range for guitar/bass
                     # Convert frequency to note name
                     note_name = self.get_note_name(detected_freq)
-                    detected = DetectedNote(note_name, detected_freq, confidence, signal_max, False)
+                    detected = DetectedNote(
+                        note_name, detected_freq, confidence, signal_max, False
+                    )
                     self.note_history.append(detected)
-                    
+
                     # Get stable note
                     new_stable_note = self.get_stable_note()
                     if new_stable_note:
                         self.stable_note = new_stable_note
                         if self.note_callback:
                             self.note_callback(self.stable_note, signal_max)
-                    
+
                     if self.debug:
                         if new_stable_note:
-                            print(f"● STABLE: {self.stable_note.name:4} | {self.stable_note.frequency:6.1f} Hz | {self.stable_note.confidence:4.2f}")
+                            print(
+                                f"● STABLE: {self.stable_note.name:4} | {self.stable_note.frequency:6.1f} Hz | {self.stable_note.confidence:4.2f}"
+                            )
                         elif self.stable_note:
-                            print(f"○ RECENT: {self.stable_note.name:4} | {self.stable_note.frequency:6.1f} Hz | {self.stable_note.confidence:4.2f}")
+                            print(
+                                f"○ RECENT: {self.stable_note.name:4} | {self.stable_note.frequency:6.1f} Hz | {self.stable_note.confidence:4.2f}"
+                            )
                         else:
                             self.current_note = detected
-                            print(f"  CURRENT: {self.current_note.name:4} | {self.current_note.frequency:6.1f} Hz | {self.current_note.confidence:4.2f}")
+                            print(
+                                f"  CURRENT: {self.current_note.name:4} | {self.current_note.frequency:6.1f} Hz | {self.current_note.confidence:4.2f}"
+                            )
             except ValueError as e:
                 if self.debug:
                     current_time = time.strftime("%H:%M:%S")
                     print(f"{current_time} | Error: {e}")
         elif self.debug:
             current_time = time.strftime("%H:%M:%S")
-            print(f"{current_time} | Waiting for input... | Signal: {signal_max:.4f} | dB: {db:.1f}")
-    
+            print(
+                f"{current_time} | Waiting for input... | Signal: {signal_max:.4f} | dB: {db:.1f}"
+            )
+
     def start(self, callback=None):
         """Start note detection
 
