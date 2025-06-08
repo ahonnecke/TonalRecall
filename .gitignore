@@ -1,3 +1,5 @@
 /__pycache__/
 /.direnv/
 *.pyc
+/tonal_recall/.last_game_duration
+/tonal_recall/stats.json
