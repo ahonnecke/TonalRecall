@@ -30,18 +30,34 @@ class NoteDetector:
         'E4': 329.6  # Guitar high E
     }
     
-    def __init__(self, device_id=None, debug=False):
+    def __init__(self, device_id=None, debug=False, silence_threshold_db=-90, tolerance=0.3, min_stable_count=3, stability_majority=0.7, group_hz=5, snap_percent=0.05, normal_majority=0.5):
         """Initialize the note detector
         
         Args:
             device_id: Audio input device ID, or None to auto-detect
             debug: Whether to print debug information
+            silence_threshold_db: Silence threshold in dB (default -90)
+            tolerance: aubio pitch tolerance (default 0.3)
+            min_stable_count: Minimum valid readings for stability (default 3)
+            stability_majority: % of readings required to change stable note (default 0.7)
+            group_hz: Frequency grouping window in Hz (default 5)
+            snap_percent: Snap to standard note if within this percent (default 0.05)
+            normal_majority: % of readings required for initial stability (default 0.5)
         """
         self.debug = debug
         self.device_id = device_id
         self.device_info = None
         self.stream = None
         self.running = False
+
+        # Exposed parameters for strictness
+        self.silence_threshold_db = silence_threshold_db
+        self.tolerance = tolerance
+        self.min_stable_count = min_stable_count
+        self.stability_majority = stability_majority
+        self.group_hz = group_hz
+        self.snap_percent = snap_percent
+        self.normal_majority = normal_majority
         
         # Note detection state
         self.note_history = deque(maxlen=10)  # Store last 10 detected notes
@@ -84,12 +100,13 @@ class NoteDetector:
                 samplerate=self.sample_rate
             )
             self.pitch_detector.set_unit("Hz")
-            self.pitch_detector.set_silence(-90)  # Lower silence threshold
-            self.pitch_detector.set_tolerance(0.3)  # Lower tolerance for responsiveness
+            self.pitch_detector.set_silence(self.silence_threshold_db)  # Exposed silence threshold
+            self.pitch_detector.set_tolerance(self.tolerance)  # Exposed tolerance for responsiveness
             
             if self.debug:
                 print(f"Initialized audio device: {self.device_info['name']} (ID: {self.device_id})")
                 print(f"Sample rate: {self.sample_rate} Hz, Buffer size: {self.buffer_size}")
+                print(f"Silence threshold: {self.silence_threshold_db} dB, Tolerance: {self.tolerance}")
                 
         except Exception as e:
             raise RuntimeError(f"Error initializing audio device: {e}")
@@ -142,17 +159,17 @@ class NoteDetector:
         # Filter out zero frequencies from history first
         valid_notes = [n for n in self.note_history if n.frequency > 0]
         
-        if len(valid_notes) < 3:  # Need at least 3 valid readings for stability
+        if len(valid_notes) < self.min_stable_count:
             return self.stable_note  # Return the current stable note to maintain stability
-            
-        # Group frequencies that are close to each other (within 5Hz)
+        
+        # Group frequencies that are close to each other (within group_hz)
         freq_groups = []
         for note in valid_notes:
             # Check if this frequency fits in an existing group
             found_group = False
             for group in freq_groups:
                 group_avg = sum(n.frequency for n in group) / len(group)
-                if abs(note.frequency - group_avg) < 5:  # Within 5Hz
+                if abs(note.frequency - group_avg) < self.group_hz:
                     group.append(note)
                     found_group = True
                     break
@@ -164,7 +181,7 @@ class NoteDetector:
         # Find the largest group
         if not freq_groups:
             return self.stable_note  # Return the current stable note to maintain stability
-            
+        
         largest_group = max(freq_groups, key=len)
         
         # Calculate average frequency for this group
@@ -175,8 +192,8 @@ class NoteDetector:
         closest_note = min(self.STANDARD_NOTES.items(), key=lambda x: abs(x[1] - avg_freq))
         note_name_std, freq_std = closest_note
         
-        # If we're within 5% of a standard note, snap to that frequency
-        if abs(avg_freq - freq_std) / freq_std < 0.05:
+        # If we're within snap_percent of a standard note, snap to that frequency
+        if abs(avg_freq - freq_std) / freq_std < self.snap_percent:
             avg_freq = freq_std
             note_name = note_name_std
         else:
@@ -187,15 +204,15 @@ class NoteDetector:
         if self.stable_note:
             # If the new note is different from the current stable note
             if note_name != self.stable_note.name:
-                # Require a stronger consensus (70% instead of 50%) to change notes
-                if len(largest_group) < len(valid_notes) * 0.7:
+                # Require a stronger consensus to change notes
+                if len(largest_group) < len(valid_notes) * self.stability_majority:
                     return self.stable_note  # Keep the current stable note
             # If it's the same note, just update the confidence
             else:
                 return DetectedNote(self.stable_note.name, self.stable_note.frequency, avg_conf, True)
         else:
             # No current stable note, use normal threshold
-            if len(largest_group) < len(valid_notes) * 0.5:  # 50% threshold
+            if len(largest_group) < len(valid_notes) * self.normal_majority:
                 return None
         
         return DetectedNote(note_name, avg_freq, avg_conf, True)

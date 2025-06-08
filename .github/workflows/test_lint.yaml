@@ -1,0 +1,70 @@
+name: Lint and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [3.11]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pipenv"
+      - name: Install pipenv
+        run: curl https://raw.githubusercontent.com/pypa/pipenv/master/get-pipenv.py | python
+      - name: Install Deps
+        working-directory: ./app
+        run: pipenv sync --dev
+
+      - name: Cache pre-commit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit/
+          key: pre-commit|${{ env.pythonLocation}}|${{hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit hooks
+        working-directory: ./app
+        run: pipenv run pre-commit run --show-diff-on-failure --color=always --all-files
+
+  unit:
+    name: unit
+    needs: lint
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [3.11]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pipenv"
+      - name: Install pipenv
+        run: curl https://raw.githubusercontent.com/pypa/pipenv/master/get-pipenv.py | python
+      - name: Install Deps
+        working-directory: ./app
+        run: pipenv sync --dev
+      - name: Cache pre-commit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit/
+          key: pre-commit|${{ env.pythonLocation}}|${{hashFiles('.pre-commit-config.yaml') }}
+      - name: Run pre-commit hooks
+        working-directory: ./app
+        run: pipenv run pre-commit run --show-diff-on-failure --color=always --all-files
+      - name: Run unit tests
+        working-directory: ./app
+        run: pipenv run python -m pytest tests/

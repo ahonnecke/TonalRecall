@@ -10,6 +10,7 @@ dependencies = [
     "pygame",
     "click>=8.2.1",
     "pyfiglet>=1.0.3",
+    "ty>=0.0.1a8",
 ]
 
 [build-system]
@@ -22,3 +23,6 @@ packages = ["."]
 [project.scripts]
 go = "test_frequency:main"
 tonal-recall = "tonal_recall.main:main"
+
+[tool.uv.scripts]
+test = "PYTHONPATH=./src pytest"

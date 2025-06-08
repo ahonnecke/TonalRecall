@@ -2,6 +2,7 @@ import time
 import random
 from tonal_recall.note_detector import NoteDetector
 import signal
+import curses
 from tonal_recall.ui import NoteGameUI, CursesUI, PygameUI
 
 
@@ -17,7 +18,9 @@ class NoteGame:
             note_detector: Optional, a NoteDetector-like instance for dependency injection/testing
         """
         self.debug = debug
-        self.detector = note_detector if note_detector is not None else NoteDetector(debug=debug)
+        self.detector = (
+            note_detector if note_detector is not None else NoteDetector(debug=debug)
+        )
         self.running = False
         self.current_target = None
         self.current_note = None  # Track the current note being played
@@ -240,9 +243,13 @@ class NoteGame:
                 time.sleep(0.05)  # Small sleep to prevent CPU hogging
 
         except Exception as e:
+            import traceback
+
+            tb = traceback.format_exc()
             self.screen.addstr(10, 0, f"Error: {e}")
+            self.screen.addstr(11, 0, tb)
             self.screen.refresh()
-            time.sleep(2)
+            time.sleep(4)
         finally:
             self.running = False
             self.detector.stop()
