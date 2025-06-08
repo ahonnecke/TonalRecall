@@ -5,6 +5,10 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Optional
+import logging
+
+note_detector_logger = logging.getLogger("tonal_recall.note_detector")
+note_detector_logger.setLevel(logging.INFO)
 
 
 @dataclass
@@ -17,11 +21,22 @@ class DetectedNote:
 
 
 class NoteDetector:
-    # ... existing code ...
+    """
+    NoteDetector uses a module-specific logger: tonal_recall.note_detector
+    Adjust log level at runtime using NoteDetector.set_log_level(level)
+    """
     # Add new default thresholds as class-level constants
+    @staticmethod
+    def set_log_level(level):
+        """Set the logging level for note detector module."""
+        note_detector_logger.setLevel(level)
+
     DEFAULT_MIN_CONFIDENCE = 0.0
     DEFAULT_MIN_SIGNAL = 0.02
     DEFAULT_MIN_FREQUENCY = 30.0
+    
+    # Class attributes (will be overridden in __init__)
+    pitch_detector = None
 
     """A class for detecting musical notes from audio input"""
 
@@ -58,35 +73,29 @@ class NoteDetector:
 
         Args:
             device_id: Audio input device ID, or None to auto-detect
-            debug: Whether to print debug information
+            debug: Whether to log debug information
             silence_threshold_db: Silence threshold in dB (default -90)
             tolerance: aubio pitch tolerance (default 0.3)
-            min_stable_count: Minimum valid readings for stability (default 3)
-            stability_majority: % of readings required to change stable note (default 0.7)
-            group_hz: Frequency grouping window in Hz (default 5)
+            min_stable_count: Minimum consecutive stable detections for note stability (default 3)
+            stability_majority: % of readings required for stability (default 0.7)
+            group_hz: Group frequencies within this Hz as the same note (default 5)
             snap_percent: Snap to standard note if within this percent (default 0.05)
             normal_majority: % of readings required for initial stability (default 0.5)
+            min_confidence: Minimum confidence for aubio pitch (default 0.0)
+            min_signal: Minimum signal amplitude (default 0.02)
+            min_frequency: Minimum frequency to consider (default 30.0)
         """
-        self.debug = debug
         self.device_id = device_id
-        self.device_info = None
-        self.stream = None
-        self.running = False
-
-        # Exposed parameters for strictness
-        self._silence_threshold_db = silence_threshold_db
-        self._tolerance = tolerance
-        self._min_stable_count = min_stable_count
-        self._stability_majority = stability_majority
+        self.debug = debug
+        self.silence_threshold_db = silence_threshold_db
+        self.tolerance = tolerance
+        self.min_stable_count = min_stable_count
+        self.stability_majority = stability_majority
         self._group_hz = group_hz
         self._snap_percent = snap_percent
         self._normal_majority = normal_majority
-
-        # New tunable thresholds for filtering
         self._min_confidence = (
-            min_confidence
-            if min_confidence is not None
-            else self.DEFAULT_MIN_CONFIDENCE
+            min_confidence if min_confidence is not None else self.DEFAULT_MIN_CONFIDENCE
         )
         self._min_signal = (
             min_signal if min_signal is not None else self.DEFAULT_MIN_SIGNAL
@@ -104,7 +113,13 @@ class NoteDetector:
         # Callback function for note detection
         self.note_callback = None
 
+        # Always initialize these attributes so they exist even if init fails
+        self.device_info = None
+        self.sample_rate = None
+        self.buffer_size = None
+
         # Find and initialize audio device
+        note_detector_logger.info("Initializing audio device for note detection...")
         self._init_audio_device()
 
     @property
@@ -131,7 +146,7 @@ class NoteDetector:
 
     @property
     def min_stable_count(self):
-        """Minimum valid readings for stability (default 3)"""
+        """Minimum consecutive stable detections for note stability (default 3)"""
         return self._min_stable_count
 
     @min_stable_count.setter
@@ -140,7 +155,7 @@ class NoteDetector:
 
     @property
     def stability_majority(self):
-        """% of readings required to change stable note (default 0.7)"""
+        """% of readings required for stability (default 0.7)"""
         return self._stability_majority
 
     @stability_majority.setter
@@ -149,7 +164,7 @@ class NoteDetector:
 
     @property
     def group_hz(self):
-        """Frequency grouping window in Hz (default 5)"""
+        """Group frequencies within this Hz as the same note (default 5)"""
         return self._group_hz
 
     @group_hz.setter
@@ -176,7 +191,7 @@ class NoteDetector:
 
     @property
     def min_confidence(self):
-        """Minimum confidence for a valid reading (default 0.5)"""
+        """Minimum confidence for aubio pitch (default 0.0)"""
         return self._min_confidence
 
     @min_confidence.setter
@@ -185,7 +200,7 @@ class NoteDetector:
 
     @property
     def min_signal(self):
-        """Minimum signal strength for a valid reading (default 0.02)"""
+        """Minimum signal amplitude (default 0.02)"""
         return self._min_signal
 
     @min_signal.setter
@@ -194,7 +209,7 @@ class NoteDetector:
 
     @property
     def min_frequency(self):
-        """Minimum frequency for a valid reading (default 30.0)"""
+        """Minimum frequency to consider (default 30.0)"""
         return self._min_frequency
 
     @min_frequency.setter
@@ -256,17 +271,18 @@ class NoteDetector:
             )  # Exposed tolerance for responsiveness
 
             if self.debug:
-                print(
+                note_detector_logger.info(
                     f"Initialized audio device: {self.device_info['name']} (ID: {self.device_id})"
                 )
-                print(
+                note_detector_logger.info(
                     f"Sample rate: {self.sample_rate} Hz, Buffer size: {self.buffer_size}"
                 )
-                print(
+                note_detector_logger.info(
                     f"Silence threshold: {self.silence_threshold_db} dB, Tolerance: {self.tolerance}"
                 )
 
         except Exception as e:
+            note_detector_logger.error(f"Error initializing audio device: {e}")
             raise RuntimeError(f"Error initializing audio device: {e}")
 
     def _find_rocksmith_adapter(self):
@@ -414,10 +430,10 @@ class NoteDetector:
         if status:
             if status.input_overflow:
                 if self.debug:
-                    print("Input overflow")
+                    note_detector_logger.warning("Input overflow")
                 return  # Skip processing this buffer on overflow
             elif self.debug:
-                print(f"Status: {status}")
+                note_detector_logger.debug(f"Status: {status}")
 
         # Get the audio data and check levels
         audio_data = indata[:, 0] if indata.shape[1] > 0 else indata.flatten()
@@ -426,14 +442,14 @@ class NoteDetector:
         # Buffer size check: skip if not expected length
         if len(audio_data) != self.buffer_size:
             if self.debug:
-                print(
+                note_detector_logger.debug(
                     f"Skipping frame: got {len(audio_data)} samples, expected {self.buffer_size}"
                 )
             return
 
         # Extra debug: print audio stats if debug==2
         if self.debug == 2:
-            print(
+            note_detector_logger.debug(
                 f"[AUDIO DEBUG] min={audio_data.min():.4f} max={audio_data.max():.4f} mean={audio_data.mean():.4f} dtype={audio_data.dtype} first10={audio_data[:10]}"
             )
 
@@ -493,14 +509,14 @@ class NoteDetector:
                         dom_note = (
                             self.get_note_name(dom_freq) if dom_freq > 0 else "---"
                         )
-                        print(
+                        note_detector_logger.debug(
                             f"{current_time} | Aubio: {pitch:.1f} Hz ({note_name}) | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}"
                         )
                     else:
                         dom_note = (
                             self.get_note_name(dom_freq) if dom_freq > 0 else "---"
                         )
-                        print(
+                        note_detector_logger.debug(
                             f"{current_time} | Aubio: {pitch:.1f} Hz | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}"
                         )
 
@@ -522,7 +538,7 @@ class NoteDetector:
                     detected_method = "none"
 
                 if self.debug:
-                    print(f"[PITCH SELECT] method={detected_method} | conf={confidence:.2f} | aubio={pitch:.1f}Hz | fft={dom_freq:.1f}Hz")
+                    note_detector_logger.debug(f"[PITCH SELECT] method={detected_method} | conf={confidence:.2f} | aubio={pitch:.1f}Hz | fft={dom_freq:.1f}Hz")
 
                 # If signal is weak (below 0.15), maintain the current stable note
                 # This prevents jumping between notes during decay
@@ -549,25 +565,25 @@ class NoteDetector:
 
                     if self.debug:
                         if new_stable_note:
-                            print(
+                            note_detector_logger.info(
                                 f"● STABLE: {self.stable_note.name:4} | {self.stable_note.frequency:6.1f} Hz | {self.stable_note.confidence:4.2f}"
                             )
                         elif self.stable_note:
-                            print(
+                            note_detector_logger.info(
                                 f"○ RECENT: {self.stable_note.name:4} | {self.stable_note.frequency:6.1f} Hz | {self.stable_note.confidence:4.2f}"
                             )
                         else:
                             self.current_note = detected
-                            print(
+                            note_detector_logger.info(
                                 f"  CURRENT: {self.current_note.name:4} | {self.current_note.frequency:6.1f} Hz | {self.current_note.confidence:4.2f}"
                             )
             except ValueError as e:
                 if self.debug:
                     current_time = time.strftime("%H:%M:%S")
-                    print(f"{current_time} | Error: {e}")
+                    note_detector_logger.warning(f"{current_time} | Error: {e}")
         elif self.debug:
             current_time = time.strftime("%H:%M:%S")
-            print(
+            note_detector_logger.debug(
                 f"{current_time} | Waiting for input... | Signal: {signal_max:.4f} | dB: {db:.1f}"
             )
 

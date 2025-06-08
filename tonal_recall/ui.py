@@ -156,26 +156,26 @@ class PygameUI(NoteGameUI):
         min_time = None
         max_time = None
         if stats["times"]:
-            avg_time = sum(stats["times"]) / len(stats["times"])
-            min_time = min(stats["times"]) if stats["times"] else 0
-            max_time = max(stats["times"]) if stats["times"] else 0
-            lines.append(f"Fastest note: {min_time:.2f} seconds")
-            lines.append(f"Slowest note: {max_time:.2f} seconds")
+            avg_time = sum(stats["times"]) / len(stats["times"]) if stats["times"] else None
+            min_time = min(stats["times"]) if stats["times"] else None
+            max_time = max(stats["times"]) if stats["times"] else None
+            lines.append(f"Fastest note: {min_time:.2f} seconds" if min_time is not None else "Fastest note: N/A")
+            lines.append(f"Slowest note: {max_time:.2f} seconds" if max_time is not None else "Slowest note: N/A")
         # Add persistent stats
         if persistent_stats:
             lines.append("--- All-Time Stats ---")
-            lines.append(
-                f"High Score (Notes/sec): {persistent_stats.get('high_score_nps', 0):.2f}"
-            )
+            high_score = persistent_stats.get('high_score_nps')
+            lines.append(f"High Score (Notes/sec): {high_score:.2f}" if high_score is not None else "High Score (Notes/sec): N/A")
             fastest = persistent_stats.get("fastest_note")
-            if fastest is not None:
-                lines.append(f"Fastest Note Ever: {fastest:.2f} seconds")
+            lines.append(f"Fastest Note Ever: {fastest:.2f} seconds" if fastest is not None else "Fastest Note Ever: N/A")
             if persistent_stats.get("history"):
                 lines.append("Recent Sessions:")
                 for entry in persistent_stats["history"][-5:]:
-                    lines.append(
-                        f"  NPS: {entry['nps']:.2f}, Fastest: {entry['fastest']:.2f} s"
-                    )
+                    nps = entry.get('nps')
+                    fastest_val = entry.get('fastest')
+                    nps_str = f"{nps:.2f}" if nps is not None else "N/A"
+                    fastest_str = f"{fastest_val:.2f}" if fastest_val is not None else "N/A"
+                    lines.append(f"  NPS: {nps_str}, Fastest: {fastest_str} s")
         lines.append("")
         lines.append("Thank you for playing!")
         # Render lines
@@ -187,12 +187,14 @@ class PygameUI(NoteGameUI):
             self.screen.blit(surf, rect)
             y += 50
         # Render average time per note in large, bold font
+        big_font = pygame.font.SysFont(None, 96, bold=True)
         if avg_time is not None:
-            big_font = pygame.font.SysFont(None, 96, bold=True)
             avg_str = f"Average time per note: {avg_time:.2f} s"
-            avg_surf = big_font.render(avg_str, True, (255, 255, 0))
-            avg_rect = avg_surf.get_rect(center=(self.width // 2, self.height // 2))
-            self.screen.blit(avg_surf, avg_rect)
+        else:
+            avg_str = "Average time per note: N/A"
+        avg_surf = big_font.render(avg_str, True, (255, 255, 0))
+        avg_rect = avg_surf.get_rect(center=(self.width // 2, self.height // 2))
+        self.screen.blit(avg_surf, avg_rect)
         pygame.display.flip()
         # Wait for user to close window
         waiting = True
@@ -201,6 +203,41 @@ class PygameUI(NoteGameUI):
                 if event.type == pygame.QUIT:
                     waiting = False
         self.cleanup()
+
+    def run_game_loop(self, game, duration_secs, note_callback):
+        """Run the main Pygame event/game loop for the given duration."""
+        import time
+        game.running = True
+        game.time_remaining = duration_secs
+        game.pick_new_target()
+        self.update_display(game)
+        if not game.detector.start(callback=note_callback):
+            print("Failed to start note detector!")
+            return
+        start_time = time.time()
+        end_time = start_time + duration_secs
+        last_second = int(duration_secs)
+        try:
+            while time.time() < end_time and game.running:
+                game.time_remaining = max(0, end_time - time.time())
+                current_second = int(game.time_remaining)
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        game.running = False
+                        break
+                if (
+                    getattr(game, "_needs_update", False)
+                    or current_second != last_second
+                ):
+                    self.update_display(game)
+                    last_second = current_second
+                    game._needs_update = False
+                pygame.time.wait(50)
+        except KeyboardInterrupt:
+            pass
+        game.running = False
+        game.detector.stop()
+        # The rest of the stats and cleanup logic remains in main.py
 
     def cleanup(self):
         if self.initialized:
