@@ -2,11 +2,11 @@
 
 import time
 import click
+import logging
 from tonal_recall.ui import NoteGameUI, CursesUI, PygameUI
-import pyfiglet
 from tonal_recall.note_game_core import NoteGame
-from tonal_recall.stats import update_stats, load_stats
-import pygame
+from tonal_recall.stats import update_stats
+from tonal_recall.logging_config import setup_logging
 
 
 class NoteGameUI:
@@ -21,6 +21,14 @@ class NoteGameUI:
 @click.option(
     "--debug", default=0, type=int, help="Debug level (0=off, 1=basic, 2=audio data)"
 )
+@click.option(
+    "--log-level",
+    default="INFO",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+    help="Set the logging level",
+)
 @click.option("--duration", "-t", default=60, help="Game duration in seconds")
 @click.option("--level", "-l", default=1, help="Game level (1=open strings only)")
 @click.option(
@@ -29,8 +37,20 @@ class NoteGameUI:
     default="curses",
     help="UI backend to use",
 )
-def main(debug, duration, level, ui):
+def main(debug, log_level, duration, level, ui):
     """Start the note guessing game"""
+    # Configure logging
+    log_level = getattr(logging, log_level.upper(), logging.INFO)
+    setup_logging(level=log_level)
+    logger = logging.getLogger("tonal_recall")
+    logger.info(
+        f"Starting Tonal Recall with log level: {logging.getLevelName(log_level)}"
+    )
+
+    # Set debug level for audio if needed
+    if debug > 0:
+        logger.info(f"Debug level set to {debug}")
+
     import os
 
     prev_duration = None
@@ -63,6 +83,7 @@ def main(debug, duration, level, ui):
                 "times": [],
                 "notes_played": {},
             }
+
             # Define the note detector callback
             def pygame_note_callback(note, signal_strength):
                 # Only update game state, never call pygame UI methods from this thread!
@@ -130,4 +151,8 @@ def main(debug, duration, level, ui):
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        logging.getLogger("tonal_recall").critical("Unhandled exception", exc_info=True)
+        raise

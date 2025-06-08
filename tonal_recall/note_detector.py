@@ -5,10 +5,11 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Optional
-import logging
 
-note_detector_logger = logging.getLogger("tonal_recall.note_detector")
-note_detector_logger.setLevel(logging.INFO)
+from .logging_config import get_logger
+
+# Get logger for this module
+note_detector_logger = get_logger("note_detector")
 
 
 @dataclass
@@ -25,6 +26,7 @@ class NoteDetector:
     NoteDetector uses a module-specific logger: tonal_recall.note_detector
     Adjust log level at runtime using NoteDetector.set_log_level(level)
     """
+
     # Add new default thresholds as class-level constants
     @staticmethod
     def set_log_level(level):
@@ -34,7 +36,7 @@ class NoteDetector:
     DEFAULT_MIN_CONFIDENCE = 0.0
     DEFAULT_MIN_SIGNAL = 0.02
     DEFAULT_MIN_FREQUENCY = 30.0
-    
+
     # Class attributes (will be overridden in __init__)
     pitch_detector = None
 
@@ -95,7 +97,9 @@ class NoteDetector:
         self._snap_percent = snap_percent
         self._normal_majority = normal_majority
         self._min_confidence = (
-            min_confidence if min_confidence is not None else self.DEFAULT_MIN_CONFIDENCE
+            min_confidence
+            if min_confidence is not None
+            else self.DEFAULT_MIN_CONFIDENCE
         )
         self._min_signal = (
             min_signal if min_signal is not None else self.DEFAULT_MIN_SIGNAL
@@ -294,13 +298,14 @@ class NoteDetector:
                     device["max_input_channels"] > 0
                     and "rocksmith" in device["name"].lower()
                 ):
-                    if self.debug:
-                        print(f"Found Rocksmith adapter: {device['name']} (ID: {i})")
+                    note_detector_logger.debug(
+                        f"Found Rocksmith adapter: {device['name']} (ID: {i})"
+                    )
                     return i, device
             return None, None
         except Exception as e:
             if self.debug:
-                print(f"Error listing audio devices: {e}")
+                note_detector_logger.error(f"Error listing audio devices: {e}")
             return None, None
 
     def get_note_name(self, freq):
@@ -343,13 +348,13 @@ class NoteDetector:
             and getattr(n, "signal", 1.0) >= self._min_signal
         ]
         if self.debug:
-            print(
+            note_detector_logger.debug(
                 f"[NoteDetector] Valid readings: {len(valid_notes)}/{len(self.note_history)} | min_conf: {self._min_confidence} min_sig: {self._min_signal} min_freq: {self._min_frequency}"
             )
         if len(valid_notes) < self.min_stable_count:
             # Not enough valid readings: set to None or keep previous, but log
             if self.debug and self.stable_note is not None:
-                print(
+                note_detector_logger.info(
                     "[NoteDetector] Not enough valid readings for stability, clearing stable note."
                 )
             self.stable_note = None
@@ -404,13 +409,15 @@ class NoteDetector:
             if note_name != self.stable_note.name:
                 if len(largest_group) < len(valid_notes) * self.stability_majority:
                     if self.debug:
-                        print(
+                        note_detector_logger.info(
                             f"[NoteDetector] Hysteresis: Keeping previous stable note {self.stable_note.name} (not enough majority for change)"
                         )
                     return self.stable_note
             else:
                 if self.debug and (self._last_stable_note != self.stable_note.name):
-                    print(f"[NoteDetector] Stable note held: {self.stable_note.name}")
+                    note_detector_logger.info(
+                        f"[NoteDetector] Stable note held: {self.stable_note.name}"
+                    )
                 self._last_stable_note = self.stable_note.name
                 return DetectedNote(
                     self.stable_note.name,
@@ -420,7 +427,7 @@ class NoteDetector:
                     True,
                 )
         if self.debug and (self._last_stable_note != note_name):
-            print(f"[NoteDetector] Stable note set to: {note_name}")
+            note_detector_logger.info(f"[NoteDetector] Stable note set to: {note_name}")
         self._last_stable_note = note_name
         return DetectedNote(note_name, avg_freq, avg_conf, avg_signal, True)
         return DetectedNote(note_name, avg_freq, avg_conf, True)
@@ -524,10 +531,7 @@ class NoteDetector:
                 # Use aubio pitch if confidence is high and pitch is valid, otherwise use FFT
                 CONFIDENCE_THRESHOLD = 0.7  # Can be tuned or made configurable
                 detected_method = None
-                if (
-                    confidence >= CONFIDENCE_THRESHOLD
-                    and 30 < pitch < 1000
-                ):
+                if confidence >= CONFIDENCE_THRESHOLD and 30 < pitch < 1000:
                     detected_freq = pitch
                     detected_method = "aubio"
                 elif 30 < dom_freq < 1000:
@@ -538,7 +542,9 @@ class NoteDetector:
                     detected_method = "none"
 
                 if self.debug:
-                    note_detector_logger.debug(f"[PITCH SELECT] method={detected_method} | conf={confidence:.2f} | aubio={pitch:.1f}Hz | fft={dom_freq:.1f}Hz")
+                    note_detector_logger.debug(
+                        f"[PITCH SELECT] method={detected_method} | conf={confidence:.2f} | aubio={pitch:.1f}Hz | fft={dom_freq:.1f}Hz"
+                    )
 
                 # If signal is weak (below 0.15), maintain the current stable note
                 # This prevents jumping between notes during decay
@@ -612,15 +618,17 @@ class NoteDetector:
             )
             self.stream.start()
             if self.debug:
-                print(f"Started note detection on device: {self.device_info['name']}")
-                print(
+                note_detector_logger.info(
+                    f"Started note detection on device: {self.device_info['name']}"
+                )
+                note_detector_logger.info(
                     "● = stable note, ○ = previously stable note, no symbol = current reading"
                 )
             return True
         except Exception as e:
             self.running = False
             if self.debug:
-                print(f"Error starting note detection: {e}")
+                note_detector_logger.info(f"Error starting note detection: {e}")
             return False
 
     def stop(self):
@@ -631,7 +639,7 @@ class NoteDetector:
             self.stream.close()
             self.stream = None
         if self.debug:
-            print("Stopped note detection")
+            note_detector_logger.info("Stopped note detection")
 
     def get_current_note(self) -> Optional[DetectedNote]:
         """Get the current detected note

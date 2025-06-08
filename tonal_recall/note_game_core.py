@@ -1,13 +1,13 @@
 import time
 import random
-import logging
-from tonal_recall.note_detector import NoteDetector
 import signal
-from tonal_recall.ui import CursesUI
-from tonal_recall.note_matcher import NoteMatcher
+from .note_detector import NoteDetector
+from .ui import CursesUI
+from .note_matcher import NoteMatcher
+from .logging_config import get_logger
 
-game_core_logger = logging.getLogger("tonal_recall.note_game_core")
-game_core_logger.setLevel(logging.INFO)  # Set to DEBUG for verbose output
+# Get logger for this module
+game_core_logger = get_logger("note_game_core")
 
 
 class NoteGame:
