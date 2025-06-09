@@ -4,7 +4,7 @@ import pygame
 from .logging_config import get_logger
 
 # Get logger for this module
-ui_logger = get_logger("ui")
+ui_logger = get_logger("tonal_recall.ui")
 
 
 class NoteGameUI:

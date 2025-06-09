@@ -2,29 +2,27 @@ import time
 import random
 import signal
 from .note_detector import NoteDetector
-from .ui import CursesUI
 from .note_matcher import NoteMatcher
+from .ui import CursesUI
 from .logging_config import get_logger
 
 # Get logger for this module
-game_core_logger = get_logger("note_game_core")
+game_core_logger = get_logger("tonal_recall.core")
 
 
 class NoteGame:
     """A simple game to practice playing notes on a guitar or bass"""
 
-    def __init__(self, debug=False, level=1, note_detector=None):
+    def __init__(self, level=1, note_detector=None):
         """Initialize the game. Optionally inject a note_detector for testability.
 
         Args:
-            debug: Whether to show debug information
             level: The game level (affects possible notes)
             note_detector: Optional, a NoteDetector-like instance for dependency injection/testing
         """
-        self.debug = debug
-        self.detector = (
-            note_detector if note_detector is not None else NoteDetector(debug=debug)
-        )
+        # Initialize note detector
+        self.detector = note_detector if note_detector is not None else NoteDetector()
+        game_core_logger.debug("Initialized NoteDetector")
         self.running = False
         self.current_target = None
         self.current_note = None  # Track the current note being played
@@ -130,30 +128,69 @@ class NoteGame:
                 self.pick_new_target()
                 self._needs_update = True
         else:
-            # Other levels: current_target is just a note, any string is valid
-            def extract_note_base(note_name):
-                # Extracts note letter and accidental (e.g. 'F#') from 'F#1'
-                if len(note_name) > 1 and note_name[1] in ["#", "b"]:
-                    return note_name[:2]
-                return note_name[:1]
-
-            note_base = extract_note_base(note.name)
-            target_base = extract_note_base(self.current_target)
+            # For levels 1-3, use NoteMatcher to check note matches
+            played_note = note.name
             game_core_logger.debug(
-                f"[MATCH DEBUG] Target: {self.current_target}, Detected: {note.name}, Note base: {note_base}, Target base: {target_base}"
+                f"Raw note detected: {played_note} (type: {type(played_note)})"
             )
-            if note_base in self.stats["notes_played"]:
-                self.stats["notes_played"][note_base] += 1
+
+            # Track note in stats
+            if played_note in self.stats["notes_played"]:
+                self.stats["notes_played"][played_note] += 1
             else:
-                self.stats["notes_played"][note_base] = 1
-            self.current_note = note.name
+                self.stats["notes_played"][played_note] = 1
+
+            self.current_note = played_note
             self._needs_update = True
 
-            if NoteMatcher.match(self.current_target, note.name):
-                elapsed = time.time() - self.start_time
-                self.stats["times"].append(elapsed)
-                self.stats["correct_notes"] += 1
-                self.pick_new_target()
+            # Only check for matches on stable notes
+            is_stable = getattr(note, "is_stable", False)
+            game_core_logger.debug(
+                f"Note stability - is_stable: {is_stable}, note: {played_note}"
+            )
+
+            if is_stable:
+                game_core_logger.info(f"🔊 STABLE NOTE DETECTED: {played_note}")
+                game_core_logger.debug(
+                    f"Current target: {self.current_target} (type: {type(self.current_target)})"
+                )
+
+                # For levels 1-3, we only care about the note name without octave when matching
+                # Extract just the note name (e.g., 'A#' from 'A#0')
+                target_note = self.current_target
+
+                # Handle the case where the played note has an octave (e.g., 'F#0')
+                # We want to remove the octave number but keep any accidental (like # or b)
+                played_note_name = played_note
+                for i, char in enumerate(played_note):
+                    if char.isdigit():
+                        played_note_name = played_note[:i]
+                        break
+
+                # Log before calling the matcher with more details
+                game_core_logger.debug(
+                    f"Attempting to match - target: '{target_note}' (type: {type(target_note)}), "
+                    f"played: '{played_note}' (as '{played_note_name}')"
+                )
+
+                # Call the matcher with the cleaned note names
+                match_result = NoteMatcher.match(str(target_note), played_note_name)
+                game_core_logger.debug(f"Match result: {match_result}")
+
+                if match_result:
+                    elapsed = time.time() - self.start_time
+                    self.stats["times"].append(elapsed)
+                    self.stats["correct_notes"] += 1
+                    game_core_logger.info(
+                        f"🎯 NOTE MATCHED! '{played_note}' matches target '{target_note}'"
+                    )
+                    self.pick_new_target()
+                else:
+                    # Log why the note didn't match (debug level to avoid cluttering output)
+                    game_core_logger.debug(
+                        f"❌ NOTE MISMATCH: '{played_note}' (as '{played_note_name}') "
+                        f"does not match target '{target_note}'"
+                    )
 
     def pick_new_target(self):
         """Pick a new target note (or note+string for level 4)"""
@@ -162,9 +199,14 @@ class NoteGame:
             while self.current_target == old_target:
                 self.current_target = random.choice(self.available_notes)
             # current_target is (note, string)
+            game_core_logger.info(
+                f"🎯 NEW TARGET: {self.current_target[0]} on {self.current_target[1]}"
+            )
         else:
             while self.current_target == old_target:
                 self.current_target = random.choice(self.available_notes)
+            game_core_logger.info(f"🎯 NEW TARGET: {self.current_target}")
+
         self.stats["total_notes"] += 1
         self.start_time = time.time()
         # Only update display immediately if using CursesUI

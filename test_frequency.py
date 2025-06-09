@@ -98,7 +98,6 @@ def main(debug):
         # Use device's preferred sample rate
         sample_rate = int(device_info["default_samplerate"])
         buffer_size = 512  # Smaller buffer for lower latency
-        hop_size = buffer_size  # Match exactly to avoid buffer size mismatch errors
     except Exception as e:
         print(f"Error selecting device: {e}")
         return

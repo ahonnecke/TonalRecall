@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
 
+import sys
+from pathlib import Path
+import logging
+from tonal_recall.logging_config import setup_logging, get_logger
 import time
 import click
-import logging
-from tonal_recall.ui import NoteGameUI, CursesUI, PygameUI
+from tonal_recall.ui import CursesUI, PygameUI  # Note: NoteGameUI is not used
 from tonal_recall.note_game_core import NoteGame
 from tonal_recall.stats import update_stats
-from tonal_recall.logging_config import setup_logging
+
+# Add the parent directory to the path so we can import tonal_recall
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Configure logging first thing
+# Initialize logging
+setup_logging()
+logger = get_logger("tonal_recall.main")
 
 
 class NoteGameUI:
@@ -18,38 +28,32 @@ class NoteGameUI:
 
 
 @click.command()
+@click.option("--duration", "-t", default=60, type=int, help="Game duration in seconds")
 @click.option(
-    "--debug", default=0, type=int, help="Debug level (0=off, 1=basic, 2=audio data)"
+    "--level", "-l", default=1, type=click.IntRange(1, 4), help="Game level (1-4)"
 )
-@click.option(
-    "--log-level",
-    default="INFO",
-    type=click.Choice(
-        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
-    ),
-    help="Set the logging level",
-)
-@click.option("--duration", "-t", default=60, help="Game duration in seconds")
-@click.option("--level", "-l", default=1, help="Game level (1=open strings only)")
 @click.option(
     "--ui",
     type=click.Choice(["curses", "pygame"]),
     default="curses",
     help="UI backend to use",
 )
-def main(debug, log_level, duration, level, ui):
-    """Start the note guessing game"""
-    # Configure logging
-    log_level = getattr(logging, log_level.upper(), logging.INFO)
-    setup_logging(level=log_level)
-    logger = logging.getLogger("tonal_recall")
-    logger.info(
-        f"Starting Tonal Recall with log level: {logging.getLevelName(log_level)}"
-    )
+def main(duration, level, ui):
+    """Start the note guessing game.
 
-    # Set debug level for audio if needed
-    if debug > 0:
-        logger.info(f"Debug level set to {debug}")
+    The debug flag controls the verbosity of the output.
+    Log levels are configured in logging_config.py and can be overridden with --log-level.
+    """
+
+    # Log startup information
+    logger.info("=" * 40)
+    logger.info(
+        f"Starting Tonal Recall - Game level: {level}, Duration: {duration}s, UI: {ui}"
+    )
+    logger.info("=" * 40)
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Command line: {' '.join(sys.argv)}")
+    logger.info("=" * 40)
 
     import os
 
@@ -65,14 +69,14 @@ def main(debug, log_level, duration, level, ui):
         print(f"Previous game duration: {prev_duration:.2f} seconds")
     game = None
     try:
-        game = NoteGame(debug=debug, level=level)
+        game = NoteGame(level=level)
         # Select UI backend
         if ui == "curses":
             game.ui = CursesUI()
             game.screen = game.ui.init_screen()
-            start_time = time.time()
+            time.time()
             game.start_game(duration=duration)
-            end_time = time.time()
+            time.time()
         elif ui == "pygame":
             game.ui = PygameUI()
             game.ui.init_screen()
@@ -89,7 +93,6 @@ def main(debug, log_level, duration, level, ui):
                 # Only update game state, never call pygame UI methods from this thread!
                 if not game.running or not game.current_target:
                     return
-                needs_update = False
                 if game.level == 4:
                     played_note = note.name
                     played_string = getattr(note, "string", None)
@@ -108,7 +111,6 @@ def main(debug, log_level, duration, level, ui):
                         game.stats["times"].append(elapsed)
                         game.stats["correct_notes"] += 1
                         game.pick_new_target()
-                        needs_update = True
                 else:
                     simple_note = note.name[0]
                     game.stats["notes_played"][simple_note] = (
@@ -120,7 +122,6 @@ def main(debug, log_level, duration, level, ui):
                         game.stats["times"].append(elapsed)
                         game.stats["correct_notes"] += 1
                         game.pick_new_target()
-                        needs_update = True
                 # Always update display to show last played note
                 game._needs_update = True
 
