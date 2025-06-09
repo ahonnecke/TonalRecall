@@ -5,78 +5,90 @@ This module provides a consistent way to configure logging across the applicatio
 
 import logging
 import sys
+from typing import Optional, Dict, Any
 
 # Log levels for different modules
-# Each module must be explicitly listed with its desired log level
-# No fallback to root logger level - each module must be explicitly configured
 MODULE_LOG_LEVELS = {
     # Core modules
     "tonal_recall": logging.INFO,
     "tonal_recall.main": logging.INFO,
     # Game components
     "tonal_recall.note_matcher": logging.DEBUG,  # Set to DEBUG for detailed matching info
-    "tonal_recall.note_detector": logging.WARNING,  # Typically noisy, keep at WARNING
+    "tonal_recall.note_detector": logging.ERROR,
     "tonal_recall.core": logging.INFO,
     "tonal_recall.ui": logging.WARNING,  # UI modules often noisy, keep at WARNING
     "tonal_recall.stats": logging.INFO,
-    # Libraries/third-party (if needed)
+    "tonal_recall.logger": logging.WARNING,  # Logger module itself should be quiet
+    # Libraries/third-party
     "aubio": logging.ERROR,
     "PIL": logging.ERROR,
+    # Root logger
+    "": logging.ERROR,
 }
 
+# Shared console handler
+_console_handler: Optional[logging.Handler] = None
 
-def setup_logging() -> None:
+# Cache for loggers to avoid duplicate setup
+_logger_cache: Dict[str, logging.Logger] = {}
+
+
+def setup_logging(force_level: Optional[int] = None) -> None:
     """Set up logging configuration for the application.
 
-    This should be called as early as possible in the application startup.
-    It configures all loggers listed in MODULE_LOG_LEVELS.
-
-    Note: The level parameter has been removed as all levels are now
-    explicitly defined in MODULE_LOG_LEVELS.
+    Args:
+        force_level: If provided, override all log levels with this level.
     """
-    # Configure root logger to only show errors
+    global _console_handler
+
+    # Configure root logger to show only errors
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.ERROR)
 
-    # Clear any existing handlers
+    # Clear all existing handlers and disable propagation for all loggers
+    for logger_name in logging.root.manager.loggerDict:
+        logger = logging.getLogger(logger_name)
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+        logger.propagate = False
+
+    # Clear root handlers
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    # Create console handler with default formatter
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Create console handler with a formatter
+    _console_handler = logging.StreamHandler(sys.stdout)
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)-30s - %(levelname)-8s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    console_handler.setFormatter(formatter)
+    _console_handler.setFormatter(formatter)
 
-    # Configure each module logger explicitly
-    for module_name, module_level in MODULE_LOG_LEVELS.items():
-        logger = logging.getLogger(module_name)
-        logger.setLevel(module_level)
+    # Apply log levels
+    if force_level is not None:
+        # Apply forced level to all loggers
+        for logger_name in logging.root.manager.loggerDict:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(force_level)
+            # Only add handler if this is one of our loggers
+            if logger_name.startswith("tonal_recall"):
+                logger.addHandler(_console_handler)
+                logger.propagate = False
+    else:
+        # Apply module-specific levels
+        for module_name, module_level in MODULE_LOG_LEVELS.items():
+            logger = logging.getLogger(module_name if module_name else None)  # Empty string for root
+            logger.setLevel(module_level)
+            logger.addHandler(_console_handler)
+            logger.propagate = False
 
-        # Clear existing handlers
-        for handler in logger.handlers[:]:
-            logger.removeHandler(handler)
-
-        # Add our console handler
-        logger.addHandler(console_handler)
-        logger.propagate = False
-
-    # Log configuration complete
-    logger = logging.getLogger("tonal_recall")
-    logger.info("Logging configuration complete")
-
-
-# Cache for loggers to avoid creating duplicate handlers
-_logger_cache = {}
+    # Confirm setup complete
+    logging.getLogger("tonal_recall").info("Logging configuration complete")
 
 
 def get_logger(name: str) -> logging.Logger:
     """Get a logger with the given name.
 
     The logger name must be explicitly listed in MODULE_LOG_LEVELS.
-    This is intentional to ensure all loggers are explicitly configured.
 
     Args:
         name: The full module name (e.g., 'tonal_recall.note_matcher')
@@ -87,42 +99,26 @@ def get_logger(name: str) -> logging.Logger:
     Raises:
         ValueError: If the module name is not in MODULE_LOG_LEVELS
     """
-    # Return cached logger if it exists
+    global _console_handler
+
     if name in _logger_cache:
         return _logger_cache[name]
 
-    # Verify the module is explicitly configured
     if name not in MODULE_LOG_LEVELS:
         raise ValueError(
             f"Logger '{name}' not found in MODULE_LOG_LEVELS. "
             "Please add it to the configuration."
         )
 
-    # Get the logger
     logger = logging.getLogger(name)
-
-    # Skip if this logger is already configured
-    if logger.handlers:
-        _logger_cache[name] = logger
-        return logger
-
-    # Set the log level from configuration
     logger.setLevel(MODULE_LOG_LEVELS[name])
 
-    # Create a console handler if one doesn't exist
-    if not logger.handlers:
-        console_handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)-30s - %(levelname)-8s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+    # Only add handler if not already attached
+    if _console_handler and not any(
+        isinstance(h, type(_console_handler)) for h in logger.handlers
+    ):
+        logger.addHandler(_console_handler)
 
-    # Disable propagation to prevent duplicate logs
     logger.propagate = False
-
-    # Cache the logger
     _logger_cache[name] = logger
-
     return logger

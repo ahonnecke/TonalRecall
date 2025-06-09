@@ -1,10 +1,11 @@
 import curses
 import pyfiglet
 import pygame
-from .logging_config import get_logger
+import time
+from .logger import get_logger
 
 # Get logger for this module
-ui_logger = get_logger("tonal_recall.ui")
+logger = get_logger(__name__)
 
 
 class NoteGameUI:
@@ -124,175 +125,263 @@ class CursesUI(NoteGameUI):
             self.screen = None
 
 
-class PygameUI(NoteGameUI):
+class PygameUI:
+    """Pygame-based UI for Tonal Recall"""
+
     def __init__(self):
+        """Initialize the Pygame UI"""
         self.screen = None
-        self.width = 800
-        self.height = 600
-        self.bg_color = (30, 30, 30)
+        self.width = 1024
+        self.height = 768
+        self.bg_color = (20, 20, 30)
         self.text_color = (255, 255, 0)
-        self.font = None
-        self.timer_font = None
-        self.note_font = None
+        self.secondary_color = (180, 255, 180)
         self.initialized = False
-        ui_logger.debug("Initializing PygameUI")
+        self.clock = None
+
+        # Fonts
+        self.title_font = None
+        self.large_font = None
+        self.medium_font = None
+        self.small_font = None
+
+        logger.debug("Initializing PygameUI")
 
     def init_screen(self):
-        pygame.init()
-        self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption("Tonal Recall - Pygame UI")
-        self.font = pygame.font.SysFont(None, 120)
-        self.timer_font = pygame.font.SysFont(None, 48)
-        self.note_font = pygame.font.SysFont(None, 64)
-        self.initialized = True
-        return self.screen
+        """Initialize the Pygame screen and resources"""
+        try:
+            pygame.init()
+            self.screen = pygame.display.set_mode((self.width, self.height))
+            pygame.display.set_caption("Tonal Recall")
+
+            # Initialize fonts
+            self.title_font = pygame.font.SysFont("Arial", 48, bold=True)
+            self.large_font = pygame.font.SysFont("Arial", 120, bold=True)
+            self.medium_font = pygame.font.SysFont("Arial", 36)
+            self.small_font = pygame.font.SysFont("Arial", 24)
+
+            self.clock = pygame.time.Clock()
+            self.initialized = True
+            logger.info("Pygame UI initialized successfully")
+            return self.screen
+
+        except Exception as e:
+            logger.error(f"Failed to initialize Pygame: {e}")
+            self.cleanup()
+            raise
 
     def update_display(self, game):
+        """Update the game display
+
+        Args:
+            game: The game instance
+        """
         if not self.initialized or not self.screen:
             return
+
+        # Clear screen
         self.screen.fill(self.bg_color)
-        timer_str = f"Time remaining: {int(game.time_remaining)}s"
-        timer_surface = self.timer_font.render(timer_str, True, (200, 200, 255))
-        timer_rect = timer_surface.get_rect(center=(self.width // 2, 40))
-        self.screen.blit(timer_surface, timer_rect)
-        note = game.current_target
-        if note:
-            if game.level == 4 and isinstance(note, tuple):
-                note_str = f"{note[0]} on {note[1]}"
-            else:
-                note_str = str(note)
-            text_surface = self.font.render(note_str, True, self.text_color)
-            text_rect = text_surface.get_rect(
-                center=(self.width // 2, self.height // 2)
+
+        # Draw header with time remaining
+        header_rect = pygame.Rect(0, 0, self.width, 80)
+        pygame.draw.rect(self.screen, (30, 30, 40), header_rect)
+
+        # Draw time remaining
+        time_str = f"Time: {int(game.time_remaining)}s"
+        time_surface = self.medium_font.render(time_str, True, (200, 200, 255))
+        time_rect = time_surface.get_rect(midtop=(self.width // 2, 20))
+        self.screen.blit(time_surface, time_rect)
+
+        # Draw score
+        score_str = f"Score: {game.stats['correct_notes']}"
+        score_surface = self.medium_font.render(score_str, True, (200, 255, 200))
+        score_rect = score_surface.get_rect(topright=(self.width - 20, 20))
+        self.screen.blit(score_surface, score_rect)
+
+        # Draw target note
+        if game.current_target:
+            # Large target note in the center
+            target_surface = self.large_font.render(
+                str(game.current_target), True, self.text_color
             )
-            self.screen.blit(text_surface, text_rect)
-        if getattr(game, "current_note", None):
-            played_str = f"You played: {game.current_note}"
-            played_surface = self.note_font.render(played_str, True, (180, 255, 180))
-            played_rect = played_surface.get_rect(
-                center=(self.width // 2, self.height - 60)
+            target_rect = target_surface.get_rect(
+                center=(self.width // 2, self.height // 2 - 40)
             )
-            self.screen.blit(played_surface, played_rect)
+            self.screen.blit(target_surface, target_rect)
+
+            # Draw "Play this note" text above
+            prompt_surface = self.medium_font.render(
+                "Play this note:", True, (200, 200, 255)
+            )
+            prompt_rect = prompt_surface.get_rect(
+                midbottom=(self.width // 2, self.height // 2 - 80)
+            )
+            self.screen.blit(prompt_surface, prompt_rect)
+
+        # Draw current note being played
+        if hasattr(game, "current_note") and game.current_note:
+            note_str = f"You played: {game.current_note}"
+            note_surface = self.medium_font.render(note_str, True, self.secondary_color)
+            note_rect = note_surface.get_rect(
+                midtop=(self.width // 2, self.height // 2 + 80)
+            )
+            self.screen.blit(note_surface, note_rect)
+
+        # Draw debug info
+        if hasattr(game, "detector") and hasattr(game.detector, "current_note"):
+            debug_y = self.height - 80
+            debug_text = f"Detected: {game.detector.current_note.name if game.detector.current_note else 'None'}"
+            debug_surface = self.small_font.render(debug_text, True, (150, 150, 150))
+            self.screen.blit(debug_surface, (20, debug_y))
+
         pygame.display.flip()
 
     def show_stats(self, game, persistent_stats=None):
+        """Display game statistics
+
+        Args:
+            game: The game instance
+            persistent_stats: Optional persistent statistics
+        """
         if not self.initialized or not self.screen:
             return
-        self.screen.fill((20, 20, 20))
+
+        # Dark background
+        self.screen.fill((10, 10, 15))
+
+        # Title
+        title_surface = self.title_font.render(
+            "Game Over - Statistics", True, (255, 255, 255)
+        )
+        title_rect = title_surface.get_rect(center=(self.width // 2, 60))
+        self.screen.blit(title_surface, title_rect)
+
+        # Game stats
         stats = game.stats
-        lines = [
-            "===== Game Statistics =====",
-            f"Notes completed: {stats['correct_notes']}",
+        y_pos = 150
+        line_height = 50
+
+        # Session stats
+        stats_lines = [
+            f"Notes Matched: {stats['correct_notes']}",
+            f"Total Notes Played: {stats['total_notes']}",
         ]
-        avg_time = None
-        min_time = None
-        max_time = None
+
+        # Add timing stats if available
         if stats["times"]:
-            avg_time = (
-                sum(stats["times"]) / len(stats["times"]) if stats["times"] else None
+            avg_time = sum(stats["times"]) / len(stats["times"])
+            min_time = min(stats["times"])
+            max_time = max(stats["times"])
+            stats_lines.extend(
+                [
+                    f"Average Time: {avg_time:.2f}s",
+                    f"Fastest Match: {min_time:.2f}s",
+                    f"Slowest Match: {max_time:.2f}s",
+                ]
             )
-            min_time = min(stats["times"]) if stats["times"] else None
-            max_time = max(stats["times"]) if stats["times"] else None
-            lines.append(
-                f"Fastest note: {min_time:.2f} seconds"
-                if min_time is not None
-                else "Fastest note: N/A"
-            )
-            lines.append(
-                f"Slowest note: {max_time:.2f} seconds"
-                if max_time is not None
-                else "Slowest note: N/A"
-            )
-        # Add persistent stats
+
+        # Add persistent stats if available
         if persistent_stats:
-            lines.append("--- All-Time Stats ---")
-            high_score = persistent_stats.get("high_score_nps")
-            lines.append(
-                f"High Score (Notes/sec): {high_score:.2f}"
-                if high_score is not None
-                else "High Score (Notes/sec): N/A"
+            stats_lines.append("")
+            stats_lines.append("--- All-Time Stats ---")
+
+            if "high_score_nps" in persistent_stats:
+                stats_lines.append(
+                    f"High Score: {persistent_stats['high_score_nps']:.1f} notes/sec"
+                )
+            if "fastest_note" in persistent_stats:
+                stats_lines.append(
+                    f"Fastest Note: {persistent_stats['fastest_note']:.2f}s"
+                )
+            if "history" in persistent_stats:
+                stats_lines.append(f"Games Played: {len(persistent_stats['history'])}")
+
+        # Render all stats lines
+        for i, line in enumerate(stats_lines):
+            if not line.strip():
+                y_pos += 20  # Extra space for section breaks
+                continue
+
+            line_surface = self.medium_font.render(line, True, (255, 255, 255))
+            line_rect = line_surface.get_rect(
+                midleft=(self.width // 3, y_pos + i * line_height)
             )
-            fastest = persistent_stats.get("fastest_note")
-            lines.append(
-                f"Fastest Note Ever: {fastest:.2f} seconds"
-                if fastest is not None
-                else "Fastest Note Ever: N/A"
-            )
-            if persistent_stats.get("history"):
-                lines.append("Recent Sessions:")
-                for entry in persistent_stats["history"][-5:]:
-                    nps = entry.get("nps")
-                    fastest_val = entry.get("fastest")
-                    nps_str = f"{nps:.2f}" if nps is not None else "N/A"
-                    fastest_str = (
-                        f"{fastest_val:.2f}" if fastest_val is not None else "N/A"
-                    )
-                    lines.append(f"  NPS: {nps_str}, Fastest: {fastest_str} s")
-        lines.append("")
-        lines.append("Thank you for playing!")
-        # Render lines
-        font = pygame.font.SysFont(None, 48)
-        y = 40
-        for i, line in enumerate(lines):
-            surf = font.render(line, True, (255, 255, 255))
-            rect = surf.get_rect(center=(self.width // 2, y))
-            self.screen.blit(surf, rect)
-            y += 50
-        # Render average time per note in large, bold font
-        big_font = pygame.font.SysFont(None, 96, bold=True)
-        if avg_time is not None:
-            avg_str = f"Average time per note: {avg_time:.2f} s"
-        else:
-            avg_str = "Average time per note: N/A"
-        avg_surf = big_font.render(avg_str, True, (255, 255, 0))
-        avg_rect = avg_surf.get_rect(center=(self.width // 2, self.height // 2))
-        self.screen.blit(avg_surf, avg_rect)
+            self.screen.blit(line_surface, line_rect)
+
+        # Instructions to exit
+        exit_text = "Click the window close button to exit"
+        exit_surface = self.small_font.render(exit_text, True, (200, 200, 200))
+        exit_rect = exit_surface.get_rect(center=(self.width // 2, self.height - 50))
+        self.screen.blit(exit_surface, exit_rect)
+
         pygame.display.flip()
-        # Wait for user to close window
+
+        # Wait for window close
         waiting = True
         while waiting:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     waiting = False
-        self.cleanup()
+            self.clock.tick(30)
 
     def run_game_loop(self, game, duration_secs, note_callback):
-        """Run the main Pygame event/game loop for the given duration."""
-        import time
+        """Run the main game loop
 
-        game.running = True
-        game.time_remaining = duration_secs
-        game.pick_new_target()
-        self.update_display(game)
-        if not game.detector.start(callback=note_callback):
-            print("Failed to start note detector!")
+        Args:
+            game: The game instance
+            duration_secs: Duration of the game in seconds
+            note_callback: Callback function for note detection
+        """
+        if not self.initialized or not self.screen:
+            logger.error("Cannot run game loop: UI not initialized")
             return
+
+        logger.info("Starting game loop")
+
+        # Calculate end time
         start_time = time.time()
         end_time = start_time + duration_secs
-        last_second = int(duration_secs)
-        try:
-            while time.time() < end_time and game.running:
-                game.time_remaining = max(0, end_time - time.time())
-                current_second = int(game.time_remaining)
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        game.running = False
-                        break
-                if (
-                    getattr(game, "_needs_update", False)
-                    or current_second != last_second
-                ):
-                    self.update_display(game)
-                    last_second = current_second
-                    game._needs_update = False
-                pygame.time.wait(50)
-        except KeyboardInterrupt:
-            pass
+
+        # Main game loop
+        running = True
+        while running and time.time() < end_time and game.running:
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    game.running = False
+                    break
+
+            # Update game state
+            current_time = time.time()
+            game.time_remaining = max(0, end_time - current_time)
+
+            # Check for note detection
+            if hasattr(game, "detector") and game.detector:
+                note = game.detector.get_current_note()
+                if note and hasattr(note, "is_stable") and note.is_stable:
+                    note_callback(note, 1.0)  # signal_strength not currently used
+
+            # Update display
+            self.update_display(game)
+
+            # Cap the frame rate
+            self.clock.tick(30)
+
+        # Game over
+        logger.info("Game loop ended")
         game.running = False
-        game.detector.stop()
-        # The rest of the stats and cleanup logic remains in main.py
+
+        # Stop the detector if it's running
+        if hasattr(game, "detector") and game.detector:
+            game.detector.stop()
 
     def cleanup(self):
+        """Clean up Pygame resources"""
         if self.initialized:
-            pygame.quit()
+            logger.debug("Cleaning up Pygame resources")
+            try:
+                pygame.quit()
+            except Exception as e:
+                logger.error(f"Error during Pygame cleanup: {e}")
             self.initialized = False

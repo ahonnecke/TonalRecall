@@ -1,5 +1,9 @@
 import os
 import json
+from .logger import get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 STATS_FILE = os.path.join(os.path.dirname(__file__), "stats.json")
 
