@@ -56,9 +56,21 @@ class CursesUI(NoteGameUI):
                     except curses.error:
                         pass
         if game.current_note:
-            screen.addstr(height - 4, 0, f"You played: {game.current_note}")
+            played_note = game.current_note
+            
+            # Handle both string and DetectedNote objects
+            if hasattr(played_note, 'name'):  # It's a DetectedNote
+                position_info = f" at {played_note.position}" if hasattr(played_note, 'position') and played_note.position else ""
+                note_name = played_note.name
+            else:  # It's a string
+                position_info = ""
+                note_name = str(played_note)
+                
+            screen.addstr(height - 5, 0, f"You played: {note_name}{position_info}")
+        
+        # Display stats
         screen.addstr(
-            height - 2,
+            height - 3,
             0,
             f"Correct: {game.stats['correct_notes']} / {game.stats['total_notes']}",
         )
@@ -220,7 +232,17 @@ class PygameUI:
 
         # Draw current note being played
         if hasattr(game, "current_note") and game.current_note:
-            note_str = f"You played: {game.current_note}"
+            played_note = game.current_note
+            
+            # Handle both string and DetectedNote objects
+            if hasattr(played_note, 'name'):  # It's a DetectedNote
+                position_info = f" at {played_note.position}" if hasattr(played_note, 'position') and played_note.position else ""
+                note_name = played_note.name
+            else:  # It's a string
+                position_info = ""
+                note_name = str(played_note)
+                
+            note_str = f"You played: {note_name}{position_info}"
             note_surface = self.medium_font.render(note_str, True, self.secondary_color)
             note_rect = note_surface.get_rect(
                 midtop=(self.width // 2, self.height // 2 + 80)

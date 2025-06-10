@@ -1,8 +1,19 @@
 """Type definitions for the Tonal Recall project."""
 
-from typing import TypedDict, List, Callable, Any
+from typing import TypedDict, List, Callable, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
+
+
+@dataclass
+class NotePosition:
+    """Represents a position on the guitar fretboard."""
+
+    string: int  # String number (0-5, where 0 is the thickest string)
+    fret: int  # Fret number (0 for open string)
+
+    def __str__(self):
+        return f"S{self.string}F{self.fret}"
 
 
 @dataclass
@@ -15,6 +26,7 @@ class DetectedNote:
     signal: float  # Signal strength (0-1, e.g., max(abs(audio)))
     is_stable: bool  # Whether this is a stable note
     timestamp: float  # Timestamp when the note was detected
+    position: Optional[NotePosition] = None  # Position on the fretboard, if known
 
 
 class NoteDetectorConfig(TypedDict, total=False):

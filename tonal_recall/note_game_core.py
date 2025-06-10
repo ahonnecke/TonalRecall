@@ -16,11 +16,12 @@ class NoteGame:
 
         Args:
             note_detector: Optional, a NoteDetector-like instance for dependency injection/testing
-            difficulty: Game difficulty level (0-3). Default is 3 (half notes).
+            difficulty: Game difficulty level (0-4). Default is 3 (half notes).
                        0: Single note (test mode)
                        1: Open strings (E, A, D, G)
                        2: Whole notes (A, B, C, D, E, F, G)
                        3: Half notes (chromatic scale with sharps)
+                       4: String Master - Whole notes with string specification (e.g., "B, S0")
         """
         # Initialize note detector and matcher
         self.detector = note_detector if note_detector is not None else NoteDetector()
@@ -44,8 +45,8 @@ class NoteGame:
         }
         self.TEST_NOTE = "F#"
 
-        # Set difficulty level (0-3)
-        self.difficulty = max(0, min(3, int(difficulty)))  # Clamp to 0-3
+        # Set difficulty level (0-4)
+        self.difficulty = max(0, min(4, int(difficulty)))  # Clamp to 0-4
 
         # Define note sets for each difficulty level
         self.note_sets = {
@@ -87,9 +88,9 @@ class NoteGame:
         if not self.running or not self.current_target:
             return
 
-        # Get the note name and update current note display
+        # Store the entire DetectedNote object
+        self.current_note = note
         played_note = note.name
-        self.current_note = played_note
 
         # Track note in stats
         if played_note in self.stats["notes_played"]:
@@ -132,16 +133,17 @@ class NoteGame:
                     self.ui.update_display(self)
 
     def set_difficulty(self, level):
-        """Set the game difficulty level (0-3).
+        """Set the game difficulty level (0-4).
 
         Args:
-            level: Difficulty level (0-3)
+            level: Difficulty level (0-4)
                   0: Single note (test mode)
                   1: Open strings (E, A, D, G)
                   2: Whole notes (A, B, C, D, E, F, G)
                   3: Half notes (chromatic scale with sharps)
+                  4: String Master - Whole notes with string specification (e.g., "B, S0")
         """
-        self.difficulty = max(0, min(3, int(level)))  # Clamp to 0-3
+        self.difficulty = max(0, min(4, int(level)))  # Clamp to 0-4
         self.available_notes = self.note_sets.get(self.difficulty, self.note_sets[3])
         logger.info(f"Difficulty set to level {self.difficulty}")
 

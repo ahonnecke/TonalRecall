@@ -25,8 +25,8 @@ def parse_arguments():
         "--difficulty",
         type=int,
         default=3,
-        choices=range(0, 4),
-        help="Game difficulty level: 0=Single note, 1=Open strings, 2=Whole notes, 3=Half notes (default: 3)",
+        choices=range(0, 5),
+        help="Game difficulty level: 0=Single note, 1=Open strings, 2=Whole notes, 3=Half notes, 4=String Master (default: 3)",
     )
     parser.add_argument(
         "--duration",

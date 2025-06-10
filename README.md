@@ -45,6 +45,10 @@ Choose the difficulty that matches your skill level:
 - **🔥 Level 3 (Advanced):**
   - Full chromatic scale
 
+- **🎯 Level 4 (String Master):**
+  - Whole notes with string specification (e.g., "B, S0" for B on string 0)
+  - Tests both note recognition and string accuracy
+
 ## 🛠️ Requirements
 
 - Python 3.8+
