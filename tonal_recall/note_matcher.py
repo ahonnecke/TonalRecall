@@ -1,4 +1,5 @@
 import re
+from typing import Dict, Optional, Pattern, Tuple, Any
 from .logger import get_logger
 
 # Get logger for this module
@@ -19,7 +20,7 @@ class NoteMatcher:
     """
 
     @staticmethod
-    def normalize_to_sharp(note):
+    def normalize_to_sharp(note: str) -> str:
         flat_to_sharp = {
             "Ab": "G#",
             "Bb": "A#",
@@ -34,7 +35,7 @@ class NoteMatcher:
         return note
 
     @classmethod
-    def match(cls, target, played):
+    def match(cls, target: str, played: str) -> bool:
         """
         Check if the played note matches the target note, ignoring octave.
 

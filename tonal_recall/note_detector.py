@@ -772,7 +772,7 @@ class NoteDetector:
         """
         self._min_frequency = max(1.0, float(value))  # Ensure positive value
 
-    def get_stability_params(self):
+    def get_stability_params(self) -> dict[str, float | int]:
         """Get all current stability parameter values"""
         return {
             "silence_threshold_db": self._silence_threshold_db,
@@ -787,11 +787,11 @@ class NoteDetector:
             "min_frequency": self._min_frequency,
         }
 
-    def _find_rocksmith_adapter(self) -> tuple[Optional[int], Optional[dict]]:
+    def _find_rocksmith_adapter(self) -> tuple[Optional[int], Optional[dict[str, Any]]]:
         """Find the Rocksmith USB Guitar Adapter in the device list
 
         Returns:
-            tuple: (device_id: Optional[int], device_info: Optional[dict]) - The device ID and info if found,
+            tuple: (device_id: Optional[int], device_info: Optional[dict[str, Any]]) - The device ID and info if found,
                   or (None, None) if not found
         """
         devices = sd.query_devices()
@@ -868,7 +868,7 @@ class NoteDetector:
                 logger.error(f"Fallback audio initialization failed: {fallback_error}")
                 raise
 
-    def get_note_name(self, freq):
+    def get_note_name(self, freq: float) -> str:
         """Convert frequency to note name
 
         Args:
@@ -1043,8 +1043,15 @@ class NoteDetector:
         self._last_stable_note = new_note.name
         return new_note
 
-    def _audio_callback(self, indata, frames, stream_time, status):
-        """Callback for processing audio data"""
+    def _audio_callback(self, indata: np.ndarray, frames: int, stream_time: dict, status: Any) -> None:
+        """Callback for processing audio data
+        
+        Args:
+            indata: Input audio data as numpy array
+            frames: Number of frames in the buffer
+            stream_time: Dictionary containing timing information
+            status: PortAudio status flags
+        """
         try:
             if status:
                 if status.input_overflow:
@@ -1233,8 +1240,8 @@ class NoteDetector:
         except Exception as e:
             logger.error(f"Error in audio callback: {e}")
 
-    def stop(self):
-        """Stop note detection"""
+    def stop(self) -> None:
+        """Stop note detection and clean up resources."""
         self._running = False
         if getattr(self, "_stream", None):
             self._stream.stop()
@@ -1244,15 +1251,17 @@ class NoteDetector:
 
     def get_current_note(self) -> Optional[DetectedNote]:
         """Get the current detected note
+        
         Returns:
-            The current stable note, or None if no note is detected
+            Optional[DetectedNote]: The current stable note, or None if no note is detected
         """
         return getattr(self, "_stable_note", None)
 
     def get_simple_note(self) -> Optional[str]:
         """Get just the note letter (A, B, C, etc.) without the octave
+        
         Returns:
-            The note letter, or None if no note is detected
+            Optional[str]: The note letter, or None if no note is detected
         """
         if getattr(self, "_stable_note", None):
             return self._stable_note.name[0]
@@ -1260,10 +1269,12 @@ class NoteDetector:
 
     def is_note_playing(self, target_note: str) -> bool:
         """Check if a specific note is currently playing
+        
         Args:
             target_note: The target note letter (A, B, C, etc.)
+            
         Returns:
-            True if the target note is currently playing, False otherwise
+            bool: True if the target note is currently playing, False otherwise
         """
         current = self.get_simple_note()
         return current == target_note

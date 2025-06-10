@@ -1,8 +1,10 @@
 import time
 import random
+from typing import Optional, Dict, List, Any, Callable, Union, Tuple
 from .note_detector import NoteDetector
 from .note_matcher import NoteMatcher
 from .logger import get_logger
+from .note_types import DetectedNote, NoteDetectorConfig
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -11,7 +13,7 @@ logger = get_logger(__name__)
 class NoteGame:
     """A simple game to practice playing notes on a guitar or bass"""
 
-    def __init__(self, note_detector=None, difficulty=3):
+    def __init__(self, note_detector: Optional[NoteDetector] = None, difficulty: int = 3) -> None:
         """Initialize the game.
 
         Args:
@@ -78,7 +80,7 @@ class NoteGame:
             "NoteGame initialized with %d available notes", len(self.available_notes)
         )
 
-    def note_detected_callback(self, note, signal_strength):
+    def note_detected_callback(self, note: DetectedNote, signal_strength: float) -> None:
         """Callback for when a note is detected
 
         Args:
@@ -132,7 +134,7 @@ class NoteGame:
                 if self.ui:
                     self.ui.update_display(self)
 
-    def set_difficulty(self, level):
+    def set_difficulty(self, level: int) -> None:
         """Set the game difficulty level (0-4).
 
         Args:
@@ -151,7 +153,7 @@ class NoteGame:
         if self.running and not self.test_mode:
             self.pick_new_target()
 
-    def pick_new_target(self):
+    def pick_new_target(self) -> str:
         """Pick a new target note from available notes based on current difficulty"""
         old_target = self.current_target
         if self.test_mode and self.test_note:
@@ -168,28 +170,8 @@ class NoteGame:
         )
         return self.current_target
 
-    def start_game(self, duration=60):
-        """Start the game with the specified duration in seconds"""
-        self.running = True
-        self.start_time = time.time()
-        self.time_remaining = duration
-        self.stats = {
-            "total_notes": 0,
-            "correct_notes": 0,
-            "times": [],
-            "notes_played": {},
-        }
 
-        # Pick the first target note
-        self.pick_new_target()
-
-        logger.info("Game started! Target note: %s", self.current_target)
-
-        # Start the detector if it's not already running
-        if not self.detector.is_running():
-            self.detector.start()
-
-    def stop_game(self):
+    def stop_game(self) -> None:
         """Stop the game and clean up resources"""
         self.running = False
         logger.info(
@@ -201,7 +183,7 @@ class NoteGame:
         # Don't stop the detector here - let the UI handle cleanup
         # to avoid threading issues
 
-    def get_stats(self):
+    def get_stats(self) -> Dict[str, Any]:
         """Return game statistics"""
         return {
             "total_notes": self.stats["total_notes"],
@@ -215,13 +197,13 @@ class NoteGame:
             "notes_played": self.stats["notes_played"],
         }
 
-    def update_display(self):
+    def update_display(self) -> None:
         """Update the game display"""
         # Only safe to call from main thread! (CursesUI: always, PygameUI: only from main loop)
         if self.ui:
             self.ui.update_display(self)
 
-    def start_test_mode(self, test_note, duration=5):
+    def start_test_mode(self, test_note: str, duration: int = 5) -> None:
         """Start the game in test mode with a single note
 
         Args:
@@ -279,12 +261,12 @@ class NoteGame:
             self.stop_game()
             raise
 
-    def cleanup_curses(self):
+    def cleanup_curses(self) -> None:
         """Clean up curses settings"""
         if self.ui:
             self.ui.cleanup()
 
-    def show_stats(self):
+    def show_stats(self) -> None:
         """Show game statistics"""
         if self.ui:
             self.ui.show_stats(self)
