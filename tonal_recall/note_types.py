@@ -1,12 +1,14 @@
 """Type definitions for the Tonal Recall project."""
-from typing import TypedDict, List, Tuple, Optional, Callable, Dict, Any, Union
+
+from typing import TypedDict, List, Callable, Any
 from dataclasses import dataclass
-from enum import Enum, auto
+from enum import Enum
 
 
 @dataclass
 class DetectedNote:
     """Represents a detected musical note with its properties."""
+
     name: str  # Note name (e.g., 'A4', 'C#3')
     frequency: float  # Frequency in Hz
     confidence: float  # Detection confidence (0-1)
@@ -17,6 +19,7 @@ class DetectedNote:
 
 class NoteDetectorConfig(TypedDict, total=False):
     """Configuration options for the NoteDetector class."""
+
     sample_rate: int
     frames_per_buffer: int
     channels: int
@@ -30,6 +33,7 @@ class NoteDetectorConfig(TypedDict, total=False):
 
 class NoteGameDifficulty(Enum):
     """Difficulty levels for the note game."""
+
     SINGLE_NOTE = 0
     OPEN_STRINGS = 1
     WHOLE_NOTES = 2

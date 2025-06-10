@@ -5,13 +5,20 @@ import aubio
 import sounddevice as sd
 import time
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Optional, Callable, List, Tuple, Dict, Any, Deque, Set, ClassVar, TypeAlias, Union
-from typing_extensions import Self
-import ty
+from typing import (
+    Optional,
+    Callable,
+    List,
+    Dict,
+    Any,
+    Deque,
+    Set,
+    ClassVar,
+    TypeAlias,
+)
 
 from .logger import get_logger
-from .note_types import DetectedNote, NoteDetectorConfig, AudioCallback
+from .note_types import DetectedNote
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -29,39 +36,101 @@ class NoteDetector:
     Confidence: TypeAlias = float
     SignalStrength: TypeAlias = float
     Timestamp: TypeAlias = float
-    
+
     # Audio configuration
     SAMPLE_RATE: ClassVar[int] = 44100  # Hz
     FRAMES_PER_BUFFER: ClassVar[int] = 1024  # Number of frames per buffer
     CHANNELS: ClassVar[int] = 1  # Mono audio
 
     # Note detection settings
-    DEFAULT_MIN_CONFIDENCE: ClassVar[Confidence] = 0.7  # Minimum confidence to consider a note detection valid
-    DEFAULT_MIN_SIGNAL: ClassVar[SignalStrength] = 0.005  # Minimum signal level to process (avoids noise)
+    DEFAULT_MIN_CONFIDENCE: ClassVar[Confidence] = (
+        0.7  # Minimum confidence to consider a note detection valid
+    )
+    DEFAULT_MIN_SIGNAL: ClassVar[SignalStrength] = (
+        0.005  # Minimum signal level to process (avoids noise)
+    )
     MIN_FREQUENCY: ClassVar[Frequency] = 30.0  # Hz - below this is probably noise
-    MAX_FREQUENCY: ClassVar[Frequency] = 1000.0  # Hz - above this is probably noise for our purposes
+    MAX_FREQUENCY: ClassVar[Frequency] = (
+        1000.0  # Hz - above this is probably noise for our purposes
+    )
 
     # Note stability tracking
-    STABILITY_WINDOW: ClassVar[int] = 5  # Number of consecutive detections to consider stable
-    STABILITY_THRESHOLD: ClassVar[float] = 0.5  # Proportion of detections that must match to be stable
+    STABILITY_WINDOW: ClassVar[int] = (
+        5  # Number of consecutive detections to consider stable
+    )
+    STABILITY_THRESHOLD: ClassVar[float] = (
+        0.5  # Proportion of detections that must match to be stable
+    )
 
     # Note names and music theory constants
-    SHARP_NOTES: ClassVar[List[NoteName]] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-    FLAT_NOTES: ClassVar[List[NoteName]] = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+    SHARP_NOTES: ClassVar[List[NoteName]] = [
+        "C",
+        "C#",
+        "D",
+        "D#",
+        "E",
+        "F",
+        "F#",
+        "G",
+        "G#",
+        "A",
+        "A#",
+        "B",
+    ]
+    FLAT_NOTES: ClassVar[List[NoteName]] = [
+        "C",
+        "Db",
+        "D",
+        "Eb",
+        "E",
+        "F",
+        "Gb",
+        "G",
+        "Ab",
+        "A",
+        "Bb",
+        "B",
+    ]
     NOTE_NAMES: ClassVar[List[NoteName]] = SHARP_NOTES  # Default to sharp notes
-    
+
     # Mapping between sharp and flat note names
-    SHARP_TO_FLAT: ClassVar[Dict[NoteName, NoteName]] = {"C#": "Db", "D#": "Eb", "F#": "Gb", "G#": "Ab", "A#": "Bb"}
-    FLAT_TO_SHARP: ClassVar[Dict[NoteName, NoteName]] = {v: k for k, v in SHARP_TO_FLAT.items()}
-    
+    SHARP_TO_FLAT: ClassVar[Dict[NoteName, NoteName]] = {
+        "C#": "Db",
+        "D#": "Eb",
+        "F#": "Gb",
+        "G#": "Ab",
+        "A#": "Bb",
+    }
+    FLAT_TO_SHARP: ClassVar[Dict[NoteName, NoteName]] = {
+        v: k for k, v in SHARP_TO_FLAT.items()
+    }
+
     # Standard note frequencies for reference (A4 = 440Hz)
     A4_FREQ: ClassVar[Frequency] = 440.0  # A4 is the reference note at 440Hz
 
     # Standard chromatic scale notes (all notes in an octave)
-    STANDARD_NOTES: ClassVar[List[NoteName]] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    STANDARD_NOTES: ClassVar[List[NoteName]] = [
+        "C",
+        "C#",
+        "D",
+        "D#",
+        "E",
+        "F",
+        "F#",
+        "G",
+        "G#",
+        "A",
+        "A#",
+        "B",
+    ]
 
     # Standard tuning for a 4-string bass (E1, A1, D2, G2)
-    STANDARD_TUNING: ClassVar[List[int]] = [41, 45, 50, 55]  # MIDI note numbers for E1, A1, D2, G2
+    STANDARD_TUNING: ClassVar[List[int]] = [
+        41,
+        45,
+        50,
+        55,
+    ]  # MIDI note numbers for E1, A1, D2, G2
 
     # Number of frets on a standard bass (typically 20-24)
     NUM_FRETS: ClassVar[int] = 24
@@ -103,8 +172,14 @@ class NoteDetector:
             channels: Number of audio channels (1=mono, 2=stereo, default 1)
         """
         # Audio configuration
-        self._sample_rate = int(sample_rate) if sample_rate is not None else self.SAMPLE_RATE
-        self._frames_per_buffer = int(frames_per_buffer) if frames_per_buffer is not None else self.FRAMES_PER_BUFFER
+        self._sample_rate = (
+            int(sample_rate) if sample_rate is not None else self.SAMPLE_RATE
+        )
+        self._frames_per_buffer = (
+            int(frames_per_buffer)
+            if frames_per_buffer is not None
+            else self.FRAMES_PER_BUFFER
+        )
         self._channels = int(channels) if channels is not None else self.CHANNELS
 
         # Detection parameters with type conversion
@@ -112,29 +187,45 @@ class NoteDetector:
         self._tolerance = float(tolerance)
         self._min_stable_count = int(min_stable_count)
         self._stability_majority = float(stability_majority)
-        self._min_confidence = float(min_confidence if min_confidence is not None else self.DEFAULT_MIN_CONFIDENCE)
-        self._min_signal = float(min_signal if min_signal is not None else self.DEFAULT_MIN_SIGNAL)
-        self._min_frequency = float(min_frequency if min_frequency is not None else self.MIN_FREQUENCY)
-        self._group_hz = 10.0  # Frequency grouping in Hz
+        self._min_confidence = float(
+            min_confidence
+            if min_confidence is not None
+            else self.DEFAULT_MIN_CONFIDENCE
+        )
+        self._min_signal = float(
+            min_signal if min_signal is not None else self.DEFAULT_MIN_SIGNAL
+        )
+        self._min_frequency = float(
+            min_frequency if min_frequency is not None else self.MIN_FREQUENCY
+        )
+        self._group_hz = 1.0  # Frequency grouping in Hz
         self._snap_percent = 0.05  # Snap to note within this % of half step
         self._normal_majority = 0.7  # % of readings required for normal note
-        
+
         # Instrument configuration
         self._use_flats: bool = bool(use_flats)
-        self._tuning: List[int] = list(tuning) if tuning is not None else self.STANDARD_TUNING.copy()
-        self._num_frets: int = int(num_frets) if num_frets is not None else self.NUM_FRETS
+        self._tuning: List[int] = (
+            list(tuning) if tuning is not None else self.STANDARD_TUNING.copy()
+        )
+        self._num_frets: int = (
+            int(num_frets) if num_frets is not None else self.NUM_FRETS
+        )
 
         # Audio processing state
         self._device_id: Optional[int] = device_id
         self._audio_stream: Optional[sd.InputStream] = None
         self._pitch_o: Any = None  # Will be initialized in _init_audio_device
         self._onset_o: Any = None  # Will be initialized in _init_audio_device
-        
+
         # Note tracking state
         self._note_history: Deque[Optional[NoteName]] = deque(maxlen=20)
         self._current_note: Optional[NoteName] = None
-        self._stable_note: Optional[DetectedNote] = None  # Track the current stable note
-        self._last_stable_note: Optional[str] = None  # Track the name of the last stable note
+        self._stable_note: Optional[DetectedNote] = (
+            None  # Track the current stable note
+        )
+        self._last_stable_note: Optional[str] = (
+            None  # Track the name of the last stable note
+        )
         self._current_confidence: float = 0.0
         self._current_signal: float = 0.0
         self._is_playing: bool = False
@@ -148,7 +239,10 @@ class NoteDetector:
 
         # Initialize aubio pitch detection
         self._pitch_detector = aubio.pitch(
-            "yin", self._frames_per_buffer * 2, self._frames_per_buffer, self._sample_rate
+            "yin",
+            self._frames_per_buffer * 2,
+            self._frames_per_buffer,
+            self._sample_rate,
         )
         self._pitch_detector.set_unit("Hz")
         self._pitch_detector.set_tolerance(self._tolerance)
@@ -167,11 +261,7 @@ class NoteDetector:
         )
 
     def _audio_callback(
-        self, 
-        indata: np.ndarray, 
-        frames: int, 
-        time_info: dict, 
-        status: sd.CallbackFlags
+        self, indata: np.ndarray, frames: int, time_info: dict, status: sd.CallbackFlags
     ) -> None:
         """Callback for processing audio data from the input stream.
 
@@ -180,7 +270,7 @@ class NoteDetector:
             frames: Number of frames in the buffer
             time_info: Dictionary containing timing information from PortAudio
             status: Callback status flags from PortAudio
-            
+
         Note:
             This callback runs in a separate audio thread. Keep processing minimal
             and avoid any blocking operations to prevent audio glitches.
@@ -207,10 +297,10 @@ class NoteDetector:
                      The function should accept two parameters:
                      - note (DetectedNote): The detected note
                      - signal_strength (float): The strength of the detected signal (0-1)
-                     
+
         Returns:
             bool: True if started successfully, False otherwise
-            
+
         Note:
             This method initializes the audio stream and starts listening for input.
             The callback will be called from a separate audio thread when notes are detected.
@@ -247,10 +337,10 @@ class NoteDetector:
                 latency="high",
             )
             self._audio_stream.start()
-            
+
             logger.info("Note detection started - stable notes will be logged")
             return True
-            
+
         except Exception as e:
             error_msg = f"Failed to start audio stream: {e}"
             logger.error(error_msg)
@@ -261,7 +351,7 @@ class NoteDetector:
 
     def stop(self) -> None:
         """Stop the note detector and clean up resources.
-        
+
         This method stops the audio stream and cleans up resources. It's safe to call
         this method even if the detector is not currently running.
         """
@@ -283,20 +373,20 @@ class NoteDetector:
                 logger.error(f"Error stopping audio stream: {e}", exc_info=True)
             finally:
                 self._audio_stream = None
-        
+
         logger.debug("Note detector stopped")
 
     def _process_audio(self, audio_data: np.ndarray) -> None:
         """Process a chunk of audio data and detect notes.
-        
+
         Args:
             audio_data: Numpy array containing audio samples (1D float32 array)
-            
+
         Note:
             This method processes audio data, detects notes, and triggers callbacks
             when notes are detected. It handles all the audio processing pipeline
             including signal level checking, pitch detection, and note stability.
-            
+
             The method follows these steps:
             1. Check if processing should continue
             2. Calculate signal level (RMS)
@@ -309,32 +399,36 @@ class NoteDetector:
         """
         if not self._running or self._callback is None:
             return
-            
+
         # Calculate signal level (RMS)
         signal_level: float = float(np.sqrt(np.mean(audio_data**2)))
-        
+
         # Skip if signal is too weak
         if signal_level < self._min_signal:
             return
-            
+
         # Get pitch and confidence from aubio
         pitch: float = float(self._pitch_detector(audio_data)[0])
         confidence: float = float(self._pitch_detector.get_confidence())
-        
+
         # Skip if confidence is too low or pitch is out of range
-        if (confidence < self._min_confidence or 
-            pitch < self._min_frequency or 
-            pitch > self.MAX_FREQUENCY):
+        if (
+            confidence < self._min_confidence
+            or pitch < self._min_frequency
+            or pitch > self.MAX_FREQUENCY
+        ):
             return
-            
+
         # Convert frequency to note name
-        note_name: Optional[str] = self._frequency_to_note(pitch, use_flats=self._use_flats)
+        note_name: Optional[str] = self._frequency_to_note(
+            pitch, use_flats=self._use_flats
+        )
         if not note_name:
             return
-            
+
         # Add to note history for stability checking
         self._note_history.append(note_name)
-        
+
         # Check if we have a stable note
         if len(self._note_history) >= self._min_stable_count:
             # Count occurrences of each note in history
@@ -342,42 +436,43 @@ class NoteDetector:
             for note in self._note_history:
                 if note is not None:
                     note_counts[note] = note_counts.get(note, 0) + 1
-            
+
             if note_counts:
                 # Find the most common note and its count
                 most_common_note: str = max(note_counts.items(), key=lambda x: x[1])[0]
-                majority: float = note_counts[most_common_note] / len(self._note_history)
-                
+                majority: float = note_counts[most_common_note] / len(
+                    self._note_history
+                )
+
                 # If we have a clear majority, consider it a stable note
                 if majority >= self._stability_majority:
                     # Only trigger callback if this is a new note
                     if most_common_note != self._current_note:
                         self._current_note = most_common_note
                         self._stable_count = 0
-                        
+
                         # Create DetectedNote object
                         detected_note = DetectedNote(
                             note=most_common_note,
                             frequency=pitch,
                             confidence=confidence,
-                            signal_strength=signal_level
+                            signal_strength=signal_level,
                         )
-                        
+
                         # Call the callback with the detected note
                         try:
                             self._callback(detected_note, signal_level)
                         except Exception as e:
                             logger.error(
-                                f"Error in note detection callback: {e}", 
-                                exc_info=True
+                                f"Error in note detection callback: {e}", exc_info=True
                             )
-                    
+
                     # Reset stability counter if we have a stable note
                     self._stable_count = 0
                 else:
                     # Increment stability counter if we don't have a stable note yet
                     self._stable_count += 1
-            
+
             # If we've had too many unstable readings, clear the current note
             if self._stable_count > self._min_stable_count * 2:
                 if self._current_note is not None:
@@ -385,132 +480,140 @@ class NoteDetector:
                     self._stable_count = 0
                     # Optionally notify that the note was cleared
                     try:
-                        self._callback(DetectedNote(
-                            note="",
-                            frequency=0.0,
-                            confidence=0.0,
-                            signal_strength=0.0
-                        ), 0.0)
+                        self._callback(
+                            DetectedNote(
+                                note="",
+                                frequency=0.0,
+                                confidence=0.0,
+                                signal_strength=0.0,
+                            ),
+                            0.0,
+                        )
                     except Exception as e:
                         logger.error(
-                            f"Error in note cleared callback: {e}",
-                            exc_info=True
+                            f"Error in note cleared callback: {e}", exc_info=True
                         )
 
     def _check_note_stability(self) -> bool:
         """Check if the current note is stable based on recent detections.
-        
+
         A note is considered stable if:
         1. We have enough recent notes to evaluate (at least min_stable_count)
         2. The same note name appears in at least stability_majority proportion of recent notes
-        
+
         Returns:
             bool: True if the current note is considered stable, False otherwise
-            
+
         Note:
             This method is used internally by _process_audio to determine if a note
             has been consistently detected and can be considered stable.
         """
         if not self._note_history or len(self._note_history) < self._min_stable_count:
             return False
-            
+
         # Get the most recent notes up to our window size
-        recent = list(self._note_history)[-self._min_stable_count:]
-        
+        recent = list(self._note_history)[-self._min_stable_count :]
+
         # Count occurrences of each note
         note_counts: Dict[Optional[str], int] = {}
         for note in recent:
             if note is not None:
                 note_counts[note] = note_counts.get(note, 0) + 1
-        
+
         # Find the most common note and its count
         if not note_counts:
             return False
-            
+
         most_common_note, count = max(note_counts.items(), key=lambda x: x[1])
-        
+
         # Calculate the proportion of the most common note
         proportion: float = count / len(recent)
-        
+
         # Consider it stable if it meets our threshold
         return proportion >= self._stability_majority
 
     def _frequency_to_note(self, frequency: float, use_flats: bool = False) -> str:
         """Convert a frequency in Hz to the nearest note name.
-        
+
         Args:
             frequency: The frequency in Hz to convert
             use_flats: If True, use flat notes (e.g., Gb) instead of sharps (e.g., F#)
-            
+
         Returns:
             str: The note name with octave (e.g., 'A4', 'F#2' or 'Gb2'), or empty string if invalid
-            
+
         Raises:
             ValueError: If frequency is not a positive number
         """
         if not isinstance(frequency, (int, float)) or not np.isfinite(frequency):
             logger.warning(f"Invalid frequency value: {frequency}")
             return ""
-            
+
         if frequency <= 0:
             logger.debug(f"Non-positive frequency detected: {frequency}")
             return ""
-            
+
         try:
             # Calculate the number of half steps from A4
             n = 12 * np.log2(frequency / self.A4_FREQ)
             note_num = round(n) + 57  # 57 is the number of semitones from C0 to A4
-            
+
             # Ensure note_num is within valid range
             if note_num < 0 or note_num >= len(self.SHARP_NOTES) * 10:  # 10 octaves
-                logger.warning(f"Note number {note_num} out of range for frequency {frequency}")
+                logger.warning(
+                    f"Note number {note_num} out of range for frequency {frequency}"
+                )
                 return ""
-                
+
             # Get note name and octave
             note_name = self.SHARP_NOTES[note_num % 12]
             octave = (note_num // 12) - 1  # C0 is octave 0
-            
+
             # Convert to flat if requested and applicable
             if use_flats and note_name in self.SHARP_TO_FLAT:
                 note_name = self.SHARP_TO_FLAT[note_name]
-                
+
             return f"{note_name}{octave}"
-            
+
         except Exception as e:
-            logger.error(f"Error converting frequency {frequency} to note: {e}", exc_info=True)
+            logger.error(
+                f"Error converting frequency {frequency} to note: {e}", exc_info=True
+            )
             return ""
-    
+
     def convert_note_notation(self, note_name: str, to_flats: bool = False) -> str:
         """Convert a note name between sharp and flat notation.
-        
+
         Args:
             note_name: The note name to convert (e.g., 'F#2' or 'Gb2')
             to_flats: If True, convert to flats (e.g., 'Gb2'), otherwise to sharps (e.g., 'F#2')
-            
+
         Returns:
             str: The converted note name, or original if no conversion needed or invalid
-            
+
         Examples:
             >>> convert_note_notation('F#2', to_flats=True)  # Returns 'Gb2'
             >>> convert_note_notation('Gb2', to_flats=False)  # Returns 'F#2'
         """
         if not note_name or not isinstance(note_name, str):
             return note_name or ""
-            
+
         try:
             # Extract note letter and octave
-            note_part = ''.join(c for c in note_name if not c.isdigit() and c != '-').strip()
-            octave_part = note_name[len(note_part):] if note_name else ""
-            
+            note_part = "".join(
+                c for c in note_name if not c.isdigit() and c != "-"
+            ).strip()
+            octave_part = note_name[len(note_part) :] if note_name else ""
+
             # Check if conversion is needed
             if to_flats and note_part in self.SHARP_TO_FLAT:
                 return f"{self.SHARP_TO_FLAT[note_part]}{octave_part}"
             elif not to_flats and note_part in self.FLAT_TO_SHARP:
                 return f"{self.FLAT_TO_SHARP[note_part]}{octave_part}"
-                
+
             # No conversion needed or possible
             return note_name
-            
+
         except Exception as e:
             logger.error(f"Error converting note {note_name}: {e}", exc_info=True)
             return note_name
@@ -686,9 +789,9 @@ class NoteDetector:
 
     def _find_rocksmith_adapter(self) -> tuple[Optional[int], Optional[dict]]:
         """Find the Rocksmith USB Guitar Adapter in the device list
-        
+
         Returns:
-            tuple: (device_id: Optional[int], device_info: Optional[dict]) - The device ID and info if found, 
+            tuple: (device_id: Optional[int], device_info: Optional[dict]) - The device ID and info if found,
                   or (None, None) if not found
         """
         devices = sd.query_devices()
@@ -701,47 +804,55 @@ class NoteDetector:
 
     def _init_audio_device(self) -> None:
         """Initialize the audio input device.
-        
+
         This method sets up the audio input device for note detection, with fallback
         to default settings if the preferred configuration fails.
-        
+
         Raises:
             Exception: If both primary and fallback audio initialization fail.
         """
         try:
             # Set environment variable to use PortAudio explicitly
             import os
-            os.environ['PYAUDIO_HOST'] = 'portaudio'
-            
+
+            os.environ["PYAUDIO_HOST"] = "portaudio"
+
             # Find the Rocksmith USB Guitar Adapter if available
             self._device_id, self._device_info = self._find_rocksmith_adapter()
-            
+
             # If no Rocksmith adapter found, use default device
             if self._device_id is None:
                 self._device_id = sd.default.device[0]  # Default input device
                 self._device_info = sd.query_devices(self._device_id)
-            
+
             # Update sample rate from device if available
-            device_rate = int(self._device_info.get('default_samplerate', self._sample_rate))
+            device_rate = int(
+                self._device_info.get("default_samplerate", self._sample_rate)
+            )
             if device_rate != self._sample_rate:
-                logger.info(f"Using device sample rate: {device_rate}Hz (requested {self._sample_rate}Hz)")
+                logger.info(
+                    f"Using device sample rate: {device_rate}Hz (requested {self._sample_rate}Hz)"
+                )
                 self._sample_rate = device_rate
-            
+
             # Initialize the audio stream with the correct buffer size
             self._buffer_size = self._frames_per_buffer
-            
+
             # Initialize aubio pitch detection with updated sample rate if needed
             self._pitch_detector = aubio.pitch(
-                "yin", self._frames_per_buffer * 2, self._frames_per_buffer, self._sample_rate
+                "yin",
+                self._frames_per_buffer * 2,
+                self._frames_per_buffer,
+                self._sample_rate,
             )
             self._pitch_detector.set_unit("Hz")
             self._pitch_detector.set_tolerance(self._tolerance)
-            
+
             logger.info(
                 f"Initialized audio device: {self._device_info['name']} "
                 f"(ID: {self._device_id}, {self._sample_rate}Hz, {self._channels}ch)"
             )
-            
+
         except Exception as e:
             logger.error(f"Error initializing audio device: {e}")
             # Try falling back to default settings if initialization fails
@@ -750,7 +861,7 @@ class NoteDetector:
                 self._audio_stream = sd.Stream(
                     samplerate=self._sample_rate,
                     channels=self._channels,
-                    dtype=np.float32
+                    dtype=np.float32,
                 )
                 logger.info("Successfully initialized with fallback audio settings")
             except Exception as fallback_error:
