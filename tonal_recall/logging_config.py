@@ -5,7 +5,7 @@ This module provides a consistent way to configure logging across the applicatio
 
 import logging
 import sys
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 
 # Log levels for different modules
 MODULE_LOG_LEVELS = {
@@ -13,8 +13,8 @@ MODULE_LOG_LEVELS = {
     "tonal_recall": logging.INFO,
     "tonal_recall.main": logging.INFO,
     # Game components
-    "tonal_recall.note_matcher": logging.DEBUG,  # Set to DEBUG for detailed matching info
-    "tonal_recall.note_detector": logging.ERROR,
+    "tonal_recall.note_matcher": logging.INFO,  # Set to DEBUG for detailed matching info
+    "tonal_recall.note_detector": logging.DEBUG,
     "tonal_recall.core": logging.INFO,
     "tonal_recall.ui": logging.WARNING,  # UI modules often noisy, keep at WARNING
     "tonal_recall.stats": logging.INFO,
@@ -76,7 +76,9 @@ def setup_logging(force_level: Optional[int] = None) -> None:
     else:
         # Apply module-specific levels
         for module_name, module_level in MODULE_LOG_LEVELS.items():
-            logger = logging.getLogger(module_name if module_name else None)  # Empty string for root
+            logger = logging.getLogger(
+                module_name if module_name else None
+            )  # Empty string for root
             logger.setLevel(module_level)
             logger.addHandler(_console_handler)
             logger.propagate = False

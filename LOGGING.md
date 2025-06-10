@@ -76,4 +76,3 @@ logger.debug("This message will be shown if matcher is set to DEBUG")
 Use this modular logger approach because:
 * Need fine-grained control over log verbosity.
 * Want clean, predictable logging output.
-

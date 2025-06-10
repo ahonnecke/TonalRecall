@@ -62,9 +62,7 @@ class NoteMatcher:
 
         try:
             # Log the raw input before any processing
-            logger.debug(
-                f"🔍 INPUT - Raw target: '{target}', Raw played: '{played}'"
-            )
+            logger.debug(f"🔍 INPUT - Raw target: '{target}', Raw played: '{played}'")
 
             # Normalize both notes to use sharps for consistency
             normalized_target = cls.normalize_to_sharp(target)

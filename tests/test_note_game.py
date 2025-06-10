@@ -14,7 +14,7 @@ class TestNoteGame(unittest.TestCase):
         self.mock_detector = MockNoteDetector()
 
     def test_correct_note_detection_level1(self):
-        game = NoteGame(debug=True, level=1, note_detector=self.mock_detector)
+        game = NoteGame(note_detector=self.mock_detector)
         game.ui = None
         game.running = True
         game.pick_new_target()
@@ -24,7 +24,7 @@ class TestNoteGame(unittest.TestCase):
         self.assertEqual(game.stats["correct_notes"], 1)
 
     def test_incorrect_note_detection_level1(self):
-        game = NoteGame(debug=True, level=1, note_detector=self.mock_detector)
+        game = NoteGame(note_detector=self.mock_detector)
         game.ui = None
         game.running = True
         game.pick_new_target()
@@ -33,7 +33,7 @@ class TestNoteGame(unittest.TestCase):
         self.assertEqual(game.stats["correct_notes"], 0)
 
     def test_multiple_correct_notes(self):
-        game = NoteGame(debug=True, level=1, note_detector=self.mock_detector)
+        game = NoteGame(note_detector=self.mock_detector)
         game.ui = None
         game.running = True
         for _ in range(3):
@@ -44,7 +44,7 @@ class TestNoteGame(unittest.TestCase):
         self.assertEqual(game.stats["correct_notes"], 3)
 
     def test_stats_notes_played(self):
-        game = NoteGame(debug=True, level=1, note_detector=self.mock_detector)
+        game = NoteGame(note_detector=self.mock_detector)
         game.ui = None
         game.running = True
         game.pick_new_target()
@@ -53,7 +53,7 @@ class TestNoteGame(unittest.TestCase):
         self.assertIn(note.name[0], game.stats["notes_played"])
 
     def test_no_callback_when_not_running(self):
-        game = NoteGame(debug=True, level=1, note_detector=self.mock_detector)
+        game = NoteGame(note_detector=self.mock_detector)
         game.ui = None
         game.running = False
         note = DummyNote("A")
