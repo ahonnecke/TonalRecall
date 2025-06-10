@@ -36,22 +36,14 @@ uv run python ./tonal_recall/main.py --ui pygame --difficulty 3
 Choose the difficulty that matches your skill level:
 
 - **🎵 Level 1 (Beginner):** 
-  - Slow tempo
-  - Only natural notes (A, B, C, D, E, F, G)
-  - Larger timing windows
-  - Perfect for getting started!
+  - Only open bass note (E, A, D, G)
 
 - **🎸 Level 2 (Intermediate):**
-  - Moderate tempo
-  - Includes sharps and flats
-  - More note variations
-  - Great for building confidence
+  - Only natural notes (A, B, C, D, E, F, G)
+
 
 - **🔥 Level 3 (Advanced):**
-  - Faster gameplay
   - Full chromatic scale
-  - Challenging note sequences
-  - For players who want to master the fretboard
 
 ## 🛠️ Requirements
 
