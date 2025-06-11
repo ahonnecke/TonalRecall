@@ -299,6 +299,8 @@ class PygameUI:
                     f"Average Time: {avg_time:.2f}s",
                     f"Fastest Match: {min_time:.2f}s",
                     f"Slowest Match: {max_time:.2f}s",
+                    f"Notes/Second: {stats.get('notes_per_second', 0):.2f}",
+                    f"Session High: {stats.get('high_score_nps', 0):.2f} notes/sec",
                 ]
             )
 
@@ -309,7 +311,7 @@ class PygameUI:
 
             if "high_score_nps" in persistent_stats:
                 stats_lines.append(
-                    f"High Score: {persistent_stats['high_score_nps']:.1f} notes/sec"
+                    f"Best Score: {persistent_stats['high_score_nps']:.2f} notes/sec"
                 )
             if "fastest_note" in persistent_stats:
                 stats_lines.append(
@@ -383,6 +385,12 @@ class PygameUI:
                 note = game.detector.get_current_note()
                 if note and hasattr(note, "is_stable") and note.is_stable:
                     note_callback(note, 1.0)  # signal_strength not currently used
+
+            # Calculate and display notes per second
+            if hasattr(game, 'game_start_time') and game.stats['correct_notes'] > 0:
+                game_duration = time.time() - game.game_start_time
+                if game_duration > 0:
+                    game.stats['notes_per_second'] = game.stats['correct_notes'] / game_duration
 
             # Update display
             self.update_display(game)

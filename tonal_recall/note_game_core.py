@@ -37,6 +37,7 @@ class NoteGame:
         self.current_target = None
         self.current_note = None
         self.start_time = 0
+        self.game_start_time = 0  # Track when the game started
         self.time_remaining = 0
         self.ui = None
         self.stats = {
@@ -44,6 +45,8 @@ class NoteGame:
             "correct_notes": 0,
             "times": [],
             "notes_played": {},
+            "notes_per_second": 0.0,
+            "high_score_nps": 0.0,
         }
         self.TEST_NOTE = "F#"
 
@@ -185,6 +188,18 @@ class NoteGame:
 
     def get_stats(self) -> Dict[str, Any]:
         """Return game statistics"""
+        # Calculate notes per second
+        game_duration = time.time() - self.game_start_time
+        notes_per_second = (
+            self.stats["correct_notes"] / game_duration
+            if game_duration > 0 and self.stats["correct_notes"] > 0
+            else 0.0
+        )
+        
+        # Update high score if current game is better
+        if notes_per_second > self.stats["high_score_nps"]:
+            self.stats["high_score_nps"] = notes_per_second
+            
         return {
             "total_notes": self.stats["total_notes"],
             "correct_notes": self.stats["correct_notes"],
@@ -195,6 +210,8 @@ class NoteGame:
             ),
             "times": self.stats["times"],
             "notes_played": self.stats["notes_played"],
+            "notes_per_second": notes_per_second,
+            "high_score_nps": self.stats["high_score_nps"],
         }
 
     def update_display(self) -> None:
@@ -231,6 +248,7 @@ class NoteGame:
 
             # Initialize game state
             self.running = True
+            self.game_start_time = time.time()
             self.start_time = time.time()
             self.time_remaining = duration
             self.stats = {
