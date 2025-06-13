@@ -9,7 +9,7 @@ from enum import Enum
 class NotePosition:
     """Represents a position on the guitar fretboard."""
 
-    string: int  # String number (0-5, where 0 is the thickest string)
+    string: int  # String number (1-X, where 0 is the thinnest string)
     fret: int  # Fret number (0 for open string)
 
     def __str__(self):
