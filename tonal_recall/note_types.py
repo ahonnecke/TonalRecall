@@ -20,13 +20,17 @@ class NotePosition:
 class DetectedNote:
     """Represents a detected musical note with its properties."""
 
-    name: str  # Note name (e.g., 'A4', 'C#3')
+    name: str  # Note name (e.g., 'A4', 'C#')
     frequency: float  # Frequency in Hz
     confidence: float  # Detection confidence (0-1)
     signal: float  # Signal strength (0-1, e.g., max(abs(audio)))
     is_stable: bool  # Whether this is a stable note
     timestamp: float  # Timestamp when the note was detected
     position: Optional[NotePosition] = None  # Position on the fretboard, if known
+    octave: Optional[int] = None  # e.g. 2
+
+    def spn(self):
+        return str(f"{self.name}{self.octave}")
 
 
 class NoteDetectorConfig(TypedDict, total=False):

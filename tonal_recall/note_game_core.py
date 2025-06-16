@@ -37,6 +37,7 @@ class NoteGame:
         self.current_target = None
         self.current_note = None
         self.start_time = 0
+        self.last_note_change_time = 0  # Track when the current note was first displayed
         self.game_start_time = 0  # Track when the game started
         self.time_remaining = 0
         self.ui = None
@@ -74,6 +75,7 @@ class NoteGame:
             ],  # Half notes (chromatic)
         }
 
+        
         # Set available notes based on difficulty
         self.available_notes = self.note_sets.get(
             self.difficulty, self.note_sets[3]
@@ -82,6 +84,27 @@ class NoteGame:
         logger.debug(
             "NoteGame initialized with %d available notes", len(self.available_notes)
         )
+
+    def pick_new_target(self) -> str:
+        """Pick a new target note from available notes based on current difficulty"""
+        old_target = self.current_target
+        if self.test_mode and self.test_note:
+            # In test mode, always return the test note
+            self.current_target = self.test_note
+        else:
+            # In normal mode, pick a random note from available notes for current difficulty
+            self.current_target = random.choice(self.available_notes)
+        
+        # Update the last note change time whenever we get a new target
+        self.last_note_change_time = time.time()
+        
+        logger.debug(
+            "New target note: %s (was: %s) [Difficulty: %d]",
+            self.current_target,
+            old_target,
+            self.difficulty,
+        )
+        return self.current_target
 
     def note_detected_callback(self, note: DetectedNote, signal_strength: float) -> None:
         """Callback for when a note is detected
@@ -122,12 +145,15 @@ class NoteGame:
             )
 
             if match_result:
-                # Record successful match
-                elapsed = time.time() - self.start_time
+                # Calculate time since the note was first displayed
+                elapsed = time.time() - self.last_note_change_time
                 self.stats["times"].append(elapsed)
                 self.stats["correct_notes"] += 1
                 logger.info(
-                    "NOTE MATCHED! '%s' matches target '%s'", played_note, target_note
+                    "NOTE MATCHED! '%s' matches target '%s' in %.2f seconds", 
+                    played_note, 
+                    target_note,
+                    elapsed
                 )
 
                 # Get a new target note
@@ -165,6 +191,10 @@ class NoteGame:
         else:
             # In normal mode, pick a random note from available notes for current difficulty
             self.current_target = random.choice(self.available_notes)
+        
+        # Update the timestamp when the target note changes
+        self.last_note_change_time = time.time()
+        
         logger.debug(
             "New target note: %s (was: %s) [Difficulty: %d]",
             self.current_target,
@@ -258,8 +288,9 @@ class NoteGame:
                 "notes_played": {},
             }
 
-            # Start with a target note
+            # Start with a target note and set the initial time
             self.pick_new_target()
+            self.last_note_change_time = time.time()  # Initialize the note change time
 
             # Update the display with initial state
             self.update_display()

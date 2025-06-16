@@ -57,17 +57,21 @@ class CursesUI(NoteGameUI):
                         pass
         if game.current_note:
             played_note = game.current_note
-            
+
             # Handle both string and DetectedNote objects
-            if hasattr(played_note, 'name'):  # It's a DetectedNote
-                position_info = f" at {played_note.position}" if hasattr(played_note, 'position') and played_note.position else ""
+            if hasattr(played_note, "name"):  # It's a DetectedNote
+                position_info = (
+                    f" at {played_note.position}"
+                    if hasattr(played_note, "position") and played_note.position
+                    else ""
+                )
                 note_name = played_note.name
             else:  # It's a string
                 position_info = ""
                 note_name = str(played_note)
-                
+
             screen.addstr(height - 5, 0, f"You played: {note_name}{position_info}")
-        
+
         # Display stats
         screen.addstr(
             height - 3,
@@ -80,28 +84,19 @@ class CursesUI(NoteGameUI):
         self.cleanup()
         print(f"Notes completed: {game.stats['correct_notes']}")
         if game.stats["times"]:
-            avg_time = (
-                sum(game.stats["times"]) / len(game.stats["times"])
-                if game.stats["times"]
-                else None
-            )
-            min_time = min(game.stats["times"]) if game.stats["times"] else None
-            max_time = max(game.stats["times"]) if game.stats["times"] else None
-            print(
-                f"Average time per note: {avg_time:.2f} seconds"
-                if avg_time is not None
-                else "Average time per note: N/A"
-            )
-            print(
-                f"Fastest note: {min_time:.2f} seconds"
-                if min_time is not None
-                else "Fastest note: N/A"
-            )
-            print(
-                f"Slowest note: {max_time:.2f} seconds"
-                if max_time is not None
-                else "Slowest note: N/A"
-            )
+            # Ensure times are in seconds and not None
+            valid_times = [t for t in game.stats["times"] if t is not None]
+            if valid_times:
+                avg_time = sum(valid_times) / len(valid_times)
+                min_time = min(valid_times)
+                max_time = max(valid_times)
+                print(f"Average time per note: {avg_time:.2f} seconds")
+                print(f"Fastest note: {min_time:.2f} seconds")
+                print(f"Slowest note: {max_time:.2f} seconds")
+            else:
+                print("Average time per note: N/A")
+                print("Fastest note: N/A")
+                print("Slowest note: N/A")
         if persistent_stats:
             print("\n--- All-Time Stats ---")
             high_score = persistent_stats.get("high_score_nps")
@@ -156,6 +151,7 @@ class PygameUI:
         self.large_font = None
         self.medium_font = None
         self.small_font = None
+        self.start = time.perf_counter()
 
         logger.debug("Initializing PygameUI")
 
@@ -233,15 +229,19 @@ class PygameUI:
         # Draw current note being played
         if hasattr(game, "current_note") and game.current_note:
             played_note = game.current_note
-            
+
             # Handle both string and DetectedNote objects
-            if hasattr(played_note, 'name'):  # It's a DetectedNote
-                position_info = f" at {played_note.position}" if hasattr(played_note, 'position') and played_note.position else ""
+            if hasattr(played_note, "name"):  # It's a DetectedNote
+                position_info = (
+                    f" at {played_note.position}"
+                    if hasattr(played_note, "position") and played_note.position
+                    else ""
+                )
                 note_name = played_note.name
             else:  # It's a string
                 position_info = ""
                 note_name = str(played_note)
-                
+
             note_str = f"You played: {note_name}{position_info}"
             note_surface = self.medium_font.render(note_str, True, self.secondary_color)
             note_rect = note_surface.get_rect(
@@ -286,23 +286,25 @@ class PygameUI:
         # Session stats
         stats_lines = [
             f"Notes Matched: {stats['correct_notes']}",
-            f"Total Notes Played: {stats['total_notes']}",
         ]
 
         # Add timing stats if available
         if stats["times"]:
-            avg_time = sum(stats["times"]) / len(stats["times"])
-            min_time = min(stats["times"])
-            max_time = max(stats["times"])
-            stats_lines.extend(
-                [
-                    f"Average Time: {avg_time:.2f}s",
-                    f"Fastest Match: {min_time:.2f}s",
-                    f"Slowest Match: {max_time:.2f}s",
-                    f"Notes/Second: {stats.get('notes_per_second', 0):.2f}",
-                    f"Session High: {stats.get('high_score_nps', 0):.2f} notes/sec",
-                ]
-            )
+            # Ensure times are in seconds and not None
+            valid_times = [t for t in stats["times"] if t is not None]
+            if valid_times:
+                avg_time = sum(valid_times) / len(valid_times)
+                min_time = min(valid_times)
+                max_time = max(valid_times)
+
+                # Format times to show at most 2 decimal places
+                stats_lines.extend(
+                    [
+                        f"Average Time: {avg_time:.2f}s",
+                        f"Fastest Match: {min_time:.2f}s",
+                        f"Slowest Match: {max_time:.2f}s",
+                    ]
+                )
 
         # Add persistent stats if available
         if persistent_stats:
@@ -387,10 +389,12 @@ class PygameUI:
                     note_callback(note, 1.0)  # signal_strength not currently used
 
             # Calculate and display notes per second
-            if hasattr(game, 'game_start_time') and game.stats['correct_notes'] > 0:
+            if hasattr(game, "game_start_time") and game.stats["correct_notes"] > 0:
                 game_duration = time.time() - game.game_start_time
                 if game_duration > 0:
-                    game.stats['notes_per_second'] = game.stats['correct_notes'] / game_duration
+                    game.stats["notes_per_second"] = (
+                        game.stats["correct_notes"] / game_duration
+                    )
 
             # Update display
             self.update_display(game)

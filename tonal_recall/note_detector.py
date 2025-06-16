@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import os
 import numpy as np
 import aubio
 import sounddevice as sd
@@ -16,6 +16,8 @@ from typing import (
     ClassVar,
     TypeAlias,
 )
+from .audio_device import find_rocksmith_adapter, init_audio_device
+from .note_utils import get_note_name
 
 from .logger import get_logger
 from .note_types import DetectedNote
@@ -452,11 +454,18 @@ class NoteDetector:
                         self._stable_count = 0
 
                         # Create DetectedNote object
+                        # Extract note name and octave from most_common_note (e.g., 'C4' -> 'C', 4)
+                        note_name = ''.join([c for c in most_common_note if not c.isdigit()])
+                        octave = int(most_common_note[len(note_name):]) if any(c.isdigit() for c in most_common_note) else 4
+                        
                         detected_note = DetectedNote(
-                            note=most_common_note,
+                            note=note_name,
+                            octave=octave,
                             frequency=pitch,
                             confidence=confidence,
-                            signal_strength=signal_level,
+                            signal=signal_level,
+                            timestamp=time.time(),
+                            is_stable=True,
                         )
 
                         # Call the callback with the detected note
@@ -483,9 +492,12 @@ class NoteDetector:
                         self._callback(
                             DetectedNote(
                                 note="",
+                                octave=4,
                                 frequency=0.0,
                                 confidence=0.0,
-                                signal_strength=0.0,
+                                signal=0.0,
+                                is_stable=False,
+                                timestamp=time.time(),
                             ),
                             0.0,
                         )
@@ -813,12 +825,11 @@ class NoteDetector:
         """
         try:
             # Set environment variable to use PortAudio explicitly
-            import os
 
             os.environ["PYAUDIO_HOST"] = "portaudio"
 
             # Find the Rocksmith USB Guitar Adapter if available
-            self._device_id, self._device_info = self._find_rocksmith_adapter()
+            self._device_id, self._device_info = find_rocksmith_adapter()
 
             # If no Rocksmith adapter found, use default device
             if self._device_id is None:
@@ -867,31 +878,6 @@ class NoteDetector:
             except Exception as fallback_error:
                 logger.error(f"Fallback audio initialization failed: {fallback_error}")
                 raise
-
-    def get_note_name(self, freq: float) -> str:
-        """Convert frequency to note name
-
-        Args:
-            freq: Frequency in Hz
-
-        Returns:
-            Note name with octave (e.g., 'A4', 'C#3')
-        """
-        if freq <= 0:
-            return "---"
-
-        # Standard reference: A4 = 440Hz
-        # Calculate half steps from A4
-        half_steps = round(12 * np.log2(freq / 440.0))
-
-        # Calculate octave (A4 is in octave 4)
-        octave = 3 + (half_steps + 9) // 12
-
-        # Get note name (0 = A, 1 = A#, etc.)
-        notes = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
-        note_idx = (half_steps % 12 + 12) % 12  # Ensure positive index
-
-        return f"{notes[note_idx]}{octave}"
 
     def get_stable_note(self) -> Optional[DetectedNote]:
         """Determine if there's a stable note in the history
@@ -995,7 +981,7 @@ class NoteDetector:
 
         # Create a new note with the averaged values
         new_note = DetectedNote(
-            name=self.get_note_name(avg_freq),
+            name=get_note_name(avg_freq),
             frequency=avg_freq,
             confidence=avg_confidence,
             signal=avg_signal,
@@ -1043,9 +1029,11 @@ class NoteDetector:
         self._last_stable_note = new_note.name
         return new_note
 
-    def _audio_callback(self, indata: np.ndarray, frames: int, stream_time: dict, status: Any) -> None:
+    def _audio_callback(
+        self, indata: np.ndarray, frames: int, stream_time: dict, status: Any
+    ) -> None:
         """Callback for processing audio data
-        
+
         Args:
             indata: Input audio data as numpy array
             frames: Number of frames in the buffer
@@ -1138,13 +1126,13 @@ class NoteDetector:
 
                 current_time = time.strftime("%H:%M:%S")
                 if pitch > 0:
-                    note_name = self.get_note_name(pitch)
-                    dom_note = self.get_note_name(dom_freq) if dom_freq > 0 else "---"
+                    note_name = get_note_name(pitch)
+                    dom_note = get_note_name(dom_freq) if dom_freq > 0 else "---"
                     logger.debug(
                         f"{current_time} | Aubio: {pitch:.1f} Hz ({note_name}) | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}"
                     )
                 else:
-                    dom_note = self.get_note_name(dom_freq) if dom_freq > 0 else "---"
+                    dom_note = get_note_name(dom_freq) if dom_freq > 0 else "---"
                     logger.debug(
                         f"{current_time} | Aubio: {pitch:.1f} Hz | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}"
                     )
@@ -1181,7 +1169,7 @@ class NoteDetector:
                     detected_freq > 0 and 30 < detected_freq < 1000
                 ):  # Reasonable range for guitar/bass
                     # Convert frequency to note name
-                    note_name = self.get_note_name(detected_freq)
+                    note_name = get_note_name(detected_freq)
                     detected = DetectedNote(
                         note_name,
                         detected_freq,
@@ -1251,7 +1239,7 @@ class NoteDetector:
 
     def get_current_note(self) -> Optional[DetectedNote]:
         """Get the current detected note
-        
+
         Returns:
             Optional[DetectedNote]: The current stable note, or None if no note is detected
         """
@@ -1259,7 +1247,7 @@ class NoteDetector:
 
     def get_simple_note(self) -> Optional[str]:
         """Get just the note letter (A, B, C, etc.) without the octave
-        
+
         Returns:
             Optional[str]: The note letter, or None if no note is detected
         """
@@ -1269,10 +1257,10 @@ class NoteDetector:
 
     def is_note_playing(self, target_note: str) -> bool:
         """Check if a specific note is currently playing
-        
+
         Args:
             target_note: The target note letter (A, B, C, etc.)
-            
+
         Returns:
             bool: True if the target note is currently playing, False otherwise
         """
