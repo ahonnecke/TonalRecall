@@ -77,7 +77,7 @@ class BaselineTester:
         Args:
             duration: Test duration in seconds.
         """
-        print(f"\n=== Guitar Note Detection Baseline Test ===\n")
+        print("\n=== Guitar Note Detection Baseline Test ===\n")
         print("Play each open string (E2, A2, D3, G3, B3, E4) during the test.")
         print(f"Test will run for {duration} seconds.\n")
         
@@ -88,7 +88,7 @@ class BaselineTester:
             print("Starting note detector...")
             self.detector.start(self.note_callback)
             
-            print(f"\n=== TEST STARTED ===")
+            print("\n=== TEST STARTED ===")
             print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"Listening for {duration} seconds...")
             print("Play each open string at least once during this time.\n")
@@ -150,7 +150,7 @@ class BaselineTester:
         with open(output_file, 'w') as f:
             json.dump(results, f, indent=2)
         
-        print(f"\n=== TEST COMPLETED ===")
+        print("\n=== TEST COMPLETED ===")
         print(f"Duration: {self.test_duration:.1f} seconds")
         print(f"Total notes detected: {len(self.detected_notes)}")
         print(f"Unique notes: {', '.join(note_counts.keys())}")

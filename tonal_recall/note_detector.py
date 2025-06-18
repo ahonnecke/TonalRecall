@@ -16,7 +16,7 @@ from typing import (
     ClassVar,
     TypeAlias,
 )
-from .audio_device import find_rocksmith_adapter, init_audio_device
+from .audio_device import find_rocksmith_adapter
 from .note_utils import get_note_name
 
 from .logger import get_logger
@@ -455,9 +455,15 @@ class NoteDetector:
 
                         # Create DetectedNote object
                         # Extract note name and octave from most_common_note (e.g., 'C4' -> 'C', 4)
-                        note_name = ''.join([c for c in most_common_note if not c.isdigit()])
-                        octave = int(most_common_note[len(note_name):]) if any(c.isdigit() for c in most_common_note) else 4
-                        
+                        note_name = "".join(
+                            [c for c in most_common_note if not c.isdigit()]
+                        )
+                        octave = (
+                            int(most_common_note[len(note_name) :])
+                            if any(c.isdigit() for c in most_common_note)
+                            else 4
+                        )
+
                         detected_note = DetectedNote(
                             note=note_name,
                             octave=octave,
@@ -1227,15 +1233,6 @@ class NoteDetector:
                 )
         except Exception as e:
             logger.error(f"Error in audio callback: {e}")
-
-    def stop(self) -> None:
-        """Stop note detection and clean up resources."""
-        self._running = False
-        if getattr(self, "_stream", None):
-            self._stream.stop()
-            self._stream.close()
-            self._stream = None
-        logger.info("Stopped note detection")
 
     def get_current_note(self) -> Optional[DetectedNote]:
         """Get the current detected note

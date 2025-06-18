@@ -1,10 +1,10 @@
 import time
 import random
-from typing import Optional, Dict, List, Any, Callable, Union, Tuple
+from typing import Optional, Dict, Any
 from .note_detector import NoteDetector
 from .note_matcher import NoteMatcher
 from .logger import get_logger
-from .note_types import DetectedNote, NoteDetectorConfig
+from .note_types import DetectedNote
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -13,7 +13,9 @@ logger = get_logger(__name__)
 class NoteGame:
     """A simple game to practice playing notes on a guitar or bass"""
 
-    def __init__(self, note_detector: Optional[NoteDetector] = None, difficulty: int = 3) -> None:
+    def __init__(
+        self, note_detector: Optional[NoteDetector] = None, difficulty: int = 3
+    ) -> None:
         """Initialize the game.
 
         Args:
@@ -37,7 +39,9 @@ class NoteGame:
         self.current_target = None
         self.current_note = None
         self.start_time = 0
-        self.last_note_change_time = 0  # Track when the current note was first displayed
+        self.last_note_change_time = (
+            0  # Track when the current note was first displayed
+        )
         self.game_start_time = 0  # Track when the game started
         self.time_remaining = 0
         self.ui = None
@@ -75,7 +79,6 @@ class NoteGame:
             ],  # Half notes (chromatic)
         }
 
-        
         # Set available notes based on difficulty
         self.available_notes = self.note_sets.get(
             self.difficulty, self.note_sets[3]
@@ -85,28 +88,9 @@ class NoteGame:
             "NoteGame initialized with %d available notes", len(self.available_notes)
         )
 
-    def pick_new_target(self) -> str:
-        """Pick a new target note from available notes based on current difficulty"""
-        old_target = self.current_target
-        if self.test_mode and self.test_note:
-            # In test mode, always return the test note
-            self.current_target = self.test_note
-        else:
-            # In normal mode, pick a random note from available notes for current difficulty
-            self.current_target = random.choice(self.available_notes)
-        
-        # Update the last note change time whenever we get a new target
-        self.last_note_change_time = time.time()
-        
-        logger.debug(
-            "New target note: %s (was: %s) [Difficulty: %d]",
-            self.current_target,
-            old_target,
-            self.difficulty,
-        )
-        return self.current_target
-
-    def note_detected_callback(self, note: DetectedNote, signal_strength: float) -> None:
+    def note_detected_callback(
+        self, note: DetectedNote, signal_strength: float
+    ) -> None:
         """Callback for when a note is detected
 
         Args:
@@ -150,10 +134,10 @@ class NoteGame:
                 self.stats["times"].append(elapsed)
                 self.stats["correct_notes"] += 1
                 logger.info(
-                    "NOTE MATCHED! '%s' matches target '%s' in %.2f seconds", 
-                    played_note, 
+                    "NOTE MATCHED! '%s' matches target '%s' in %.2f seconds",
+                    played_note,
                     target_note,
-                    elapsed
+                    elapsed,
                 )
 
                 # Get a new target note
@@ -191,10 +175,10 @@ class NoteGame:
         else:
             # In normal mode, pick a random note from available notes for current difficulty
             self.current_target = random.choice(self.available_notes)
-        
+
         # Update the timestamp when the target note changes
         self.last_note_change_time = time.time()
-        
+
         logger.debug(
             "New target note: %s (was: %s) [Difficulty: %d]",
             self.current_target,
@@ -202,7 +186,6 @@ class NoteGame:
             self.difficulty,
         )
         return self.current_target
-
 
     def stop_game(self) -> None:
         """Stop the game and clean up resources"""
@@ -225,11 +208,11 @@ class NoteGame:
             if game_duration > 0 and self.stats["correct_notes"] > 0
             else 0.0
         )
-        
+
         # Update high score if current game is better
         if notes_per_second > self.stats["high_score_nps"]:
             self.stats["high_score_nps"] = notes_per_second
-            
+
         return {
             "total_notes": self.stats["total_notes"],
             "correct_notes": self.stats["correct_notes"],

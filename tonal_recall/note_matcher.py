@@ -1,5 +1,4 @@
 import re
-from typing import Dict, Optional, Pattern, Tuple, Any
 from .logger import get_logger
 
 # Get logger for this module
