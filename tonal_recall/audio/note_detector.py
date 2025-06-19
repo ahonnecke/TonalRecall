@@ -9,11 +9,12 @@ from typing import Optional, Dict, Deque, ClassVar, TypeAlias, Callable, Any
 from ..logger import get_logger
 from ..note_types import DetectedNote
 from ..note_utils import get_note_name
+from ..core.interfaces import INoteDetector
 
 logger = get_logger(__name__)
 
 
-class NoteDetector:
+class NoteDetector(INoteDetector):
     """Class for detecting musical notes from audio data."""
     
     # Type aliases

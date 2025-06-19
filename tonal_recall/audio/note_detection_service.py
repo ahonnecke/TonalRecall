@@ -6,13 +6,14 @@ from typing import Optional, Callable, Dict, Any
 
 from ..logger import get_logger
 from ..note_types import DetectedNote
-from .audio_input import AudioInputHandler, SoundDeviceInput
+from .audio_input import SoundDeviceInput
 from .note_detector import NoteDetector
+from ..core.interfaces import INoteDetectionService, INoteDetector, IAudioInput
 
 logger = get_logger(__name__)
 
 
-class NoteDetectionService:
+class NoteDetectionService(INoteDetectionService):
     """Service that integrates audio input and note detection.
     
     This class acts as a facade for the audio input and note detection components,
@@ -21,8 +22,8 @@ class NoteDetectionService:
     
     def __init__(
         self,
-        audio_input: Optional[AudioInputHandler] = None,
-        note_detector: Optional[NoteDetector] = None,
+        audio_input: Optional[IAudioInput] = None,
+        note_detector: Optional[INoteDetector] = None,
         device_id: Optional[int] = None,
         sample_rate: int = 44100,
         frames_per_buffer: int = 1024,

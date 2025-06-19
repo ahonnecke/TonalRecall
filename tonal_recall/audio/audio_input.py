@@ -8,19 +8,31 @@ from typing import Optional, Dict, Any, Tuple, Callable, ClassVar
 from abc import ABC, abstractmethod
 
 from ..logger import get_logger
+from ..core.interfaces import IAudioInput
 
 logger = get_logger(__name__)
 
 
-class AudioInputHandler(ABC):
+class AudioInputHandler(IAudioInput, ABC):
     """Abstract base class for audio input handlers."""
 
+    def is_running(self) -> bool:
+        """Check if audio input is running.
+        
+        Returns:
+            True if audio input is running, False otherwise
+        """
+        return self._running
+    
     @abstractmethod
-    def start(self, callback: Callable[[np.ndarray, float], None]) -> None:
+    def start(self, callback: Callable[[np.ndarray, float], None]) -> bool:
         """Start capturing audio and pass it to the callback.
         
         Args:
             callback: Function to call with audio data and timestamp
+            
+        Returns:
+            True if started successfully, False otherwise
         """
         pass
     
@@ -173,7 +185,7 @@ class SoundDeviceInput(AudioInputHandler):
             # Call the user's callback with the audio data and current time
             self._callback(audio_data, time.time())
     
-    def start(self, callback: Callable[[np.ndarray, float], None]) -> None:
+    def start(self, callback: Callable[[np.ndarray, float], None]) -> bool:
         """Start capturing audio and pass it to the callback.
         
         Args:
@@ -221,7 +233,9 @@ class SoundDeviceInput(AudioInputHandler):
         if not success:
             error_msg = "Could not start audio input with any sample rate"
             logger.error(error_msg)
-            raise RuntimeError(error_msg)
+            return False
+            
+        return True
     
     def stop(self) -> None:
         """Stop capturing audio."""
