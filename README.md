@@ -23,12 +23,11 @@ Tonal Recall is an interactive guitar training application that helps you learn 
 4. Play the notes shown on screen and get instant feedback!
 
 ```bash
-uv run python ./tonal_recall/main.py --ui pygame --difficulty 3
+uv run python ./tonal_recall/main.py --difficulty 3 --duration 10
 ```
 
 ### Command Line Options
 
-- `--ui pygame`: Launches the graphical interface using Pygame (default)
 - `--difficulty [1-3]`: Sets the game difficulty (see below for details)
 
 ## 🎯 Difficulty Levels
