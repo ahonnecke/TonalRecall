@@ -3,7 +3,7 @@
 import time
 import argparse
 import sys
-from typing import List, Optional
+from typing import Optional
 
 from ..logger import get_logger
 from ..note_types import DetectedNote
@@ -119,7 +119,6 @@ class NoteDetectorCLI:
         print(f"[{elapsed:.2f}s] {note.name} ({note.frequency:.1f}Hz, conf: {note.confidence:.2f}, signal: {note.signal:.4f})")
         
         # Flush stdout to ensure immediate display
-        import sys
         sys.stdout.flush()
 
 

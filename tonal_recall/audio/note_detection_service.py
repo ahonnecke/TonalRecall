@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import time
-from typing import Optional, Callable, Dict, Any, List
+from typing import Optional, Callable, Dict, Any
 
 from ..logger import get_logger
 from ..note_types import DetectedNote

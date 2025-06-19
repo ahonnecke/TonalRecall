@@ -3,9 +3,8 @@
 from __future__ import annotations
 import numpy as np
 import aubio
-import time
 from collections import deque
-from typing import Optional, List, Dict, Deque, ClassVar, TypeAlias, Callable, Any
+from typing import Optional, Dict, Deque, ClassVar, TypeAlias, Callable, Any
 
 from ..logger import get_logger
 from ..note_types import DetectedNote
@@ -45,6 +44,11 @@ class NoteDetector:
         use_flats: bool = False,
         callback: Optional[Callable] = None,
         tolerance: float = 0.8,
+        min_stable_count: int = 3,
+        stability_majority: float = 0.6,
+        group_hz: float = 5.0,
+        snap_percent: float = 0.0,
+        harmonic_correction: bool = True,  # Enable harmonic correction for low notes
     ) -> None:
         """Initialize the NoteDetector.
         
@@ -58,6 +62,11 @@ class NoteDetector:
             use_flats: If True, use flat notes (e.g., 'Bb') instead of sharps (e.g., 'A#')
             callback: Optional callback function for note detection events
             tolerance: Aubio pitch detection tolerance (0.0 to 1.0)
+            min_stable_count: Minimum number of consecutive detections to consider a note stable
+            stability_majority: Proportion of detections that must match to be stable
+            group_hz: Frequency grouping in Hz
+            snap_percent: Snap percentage for note detection
+            harmonic_correction: Enable harmonic correction for low notes
         """
         # Initialize parameters
         self._sample_rate = sample_rate
@@ -69,15 +78,45 @@ class NoteDetector:
         self._min_frequency = min_frequency
         self._use_flats = use_flats
         self._callback = callback
+        self._min_stable_count = min_stable_count
+        self._stability_majority = stability_majority
+        self._group_hz = group_hz
+        self._snap_percent = snap_percent
+        self._harmonic_correction = harmonic_correction
+        
+        # Guitar open string frequencies for reference (E2 to E4)
+        self._guitar_strings = {
+            'E2': 82.41,  # Low E (actually E2)
+            'A2': 110.00,  # A
+            'D3': 146.83,  # D
+            'G3': 196.00,  # G
+            'B3': 246.94,  # B
+            'E4': 329.63,  # High E
+        }
+        
+        # Low frequency notes that might need harmonic correction
+        self._low_notes = {
+            'E1': 41.20,  # One octave below standard low E
+            'F1': 43.65,
+            'F#1': 46.25,
+            'G1': 49.00,
+            'G#1': 51.91,
+            'A1': 55.00,
+            'A#1': 58.27,
+            'B1': 61.74,
+            'C2': 65.41,
+            'C#2': 69.30,
+            'D2': 73.42,
+            'D#2': 77.78,
+            'E2': 82.41,  # Standard low E
+        }
         
         # Initialize aubio pitch detection
         self._pitch_detector = aubio.pitch("yin", self._hop_size * 2, self._hop_size, self._sample_rate)
         self._pitch_detector.set_unit("Hz")
         self._pitch_detector.set_tolerance(self._tolerance)
         
-        # Initialize stability parameters
-        self._min_stable_count = 3  # Minimum number of consecutive detections to consider a note stable
-        self._stability_majority = 0.7  # Proportion of detections that must match to be stable
+        # Stability parameters already initialized in constructor
         
         # Initialize note history and current state
         self._note_history: Deque[str] = deque(maxlen=self.STABILITY_WINDOW)
@@ -134,7 +173,7 @@ class NoteDetector:
             if signal_max > 0.01:  # Basic noise gate - same as baseline
                 # Apply a window function to reduce spectral leakage
                 window = np.hanning(len(audio_data))
-                windowed_data = audio_data * window
+                audio_data * window
                 
                 # Get pitch and confidence from aubio
                 pitch = float(self._pitch_detector(audio_data)[0])
@@ -148,8 +187,34 @@ class NoteDetector:
                 ):
                     return None
                 
+                # Apply harmonic correction for low frequencies, but only in specific cases
+                corrected_pitch = pitch
+                
+                # Only apply harmonic correction for specific frequency ranges
+                # E1 (41.2 Hz) might be detected as E2 (82.4 Hz)
+                # F1 (43.65 Hz) might be detected as F2 (87.3 Hz)
+                if self._harmonic_correction:
+                    # Check specifically for E2 and F2 frequencies that might be harmonics
+                    if 81.0 < pitch < 84.0:  # Potential E2 that might be E1
+                        half_pitch = pitch / 2.0
+                        if abs(half_pitch - 41.2) < 2.0:  # Close to E1
+                            logger.debug(f"Harmonic correction for E: {pitch:.1f}Hz -> {half_pitch:.1f}Hz (E1)")
+                            corrected_pitch = half_pitch
+                    
+                    elif 86.0 < pitch < 89.0:  # Potential F2 that might be F1
+                        half_pitch = pitch / 2.0
+                        if abs(half_pitch - 43.65) < 2.0:  # Close to F1
+                            logger.debug(f"Harmonic correction for F: {pitch:.1f}Hz -> {half_pitch:.1f}Hz (F1)")
+                            corrected_pitch = half_pitch
+                    
+                    elif 92.0 < pitch < 94.0:  # Potential F#2 that might be F#1
+                        half_pitch = pitch / 2.0
+                        if abs(half_pitch - 46.25) < 2.0:  # Close to F#1
+                            logger.debug(f"Harmonic correction for F#: {pitch:.1f}Hz -> {half_pitch:.1f}Hz (F#1)")
+                            corrected_pitch = half_pitch
+                
                 # Convert frequency to note name
-                note_name = get_note_name(pitch, self._use_flats)
+                note_name = get_note_name(corrected_pitch, self._use_flats)
                 
                 # Add to note history for stability checking
                 self._note_history.append(note_name)
@@ -177,7 +242,7 @@ class NoteDetector:
                                 # Create DetectedNote object
                                 detected_note = DetectedNote(
                                     name=most_common_note,
-                                    frequency=pitch,
+                                    frequency=corrected_pitch,  # Use the corrected pitch
                                     confidence=confidence,
                                     signal=rms,  # Use RMS as signal strength
                                     is_stable=True,
