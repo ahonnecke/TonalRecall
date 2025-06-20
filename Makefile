@@ -2,16 +2,19 @@
 
 # Run all tests
 test:
-	PYTHONPATH=./ pytest -v tests/
+	PYTHONPATH=./ pytest -s
 
 # Watch for file changes and run tests
-test-watch:
-	PYTHONPATH=./ ptw --now . -- tests/
+test.watch:
+	PYTHONPATH=./ ptw --now . --
 
 # Debug test failures
-test-debug:
-	PYTHONPATH=./ pytest -v --pdb tests/
+test.logs:
+	PYTHONPATH=./ pytest -v -o log_cli=true -o log_cli_level=DEBUG
 
-# Run only note detection tests
-note-tests:
-	PYTHONPATH=./ pytest -v tests/note_detection/
+# Debug test failures
+test.pdb:
+	PYTHONPATH=./ pytest -v --pdb -o log_cli=true -o log_cli_level=DEBUG
+
+test.realnotes.logs:
+	PYTHONPATH=./ pytest -v -o log_cli=true -o log_cli_level=DEBUG tonal_recall/tests/test_audio_processing.py

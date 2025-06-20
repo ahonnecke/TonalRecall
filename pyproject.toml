@@ -24,3 +24,5 @@ packages = ["."]
 [project.scripts]
 go = "test_frequency:main"
 tonal-recall = "tonal_recall.main:main"
+pytest = "pytest:main"
+pytest_debug = "pytest_debug:main"

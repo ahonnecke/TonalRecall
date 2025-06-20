@@ -52,10 +52,11 @@ class LiveAudioProvider(IAudioProvider):
 
 class WavFileAudioProvider(IAudioProvider):
     """Provides audio data by reading from a WAV file."""
-    def __init__(self, file_path: str, chunk_size: int, loop: bool = False):
+    def __init__(self, file_path: str, chunk_size: int, loop: bool = False, gain: float = 1.0):
         self._file_path = file_path
         self._chunk_size = chunk_size
         self._loop = loop
+        self._gain = gain
         self._on_data_callback: Optional[Callable[[bytes], None]] = None
         self._is_running = False
         self._thread: Optional[threading.Thread] = None
@@ -97,6 +98,10 @@ class WavFileAudioProvider(IAudioProvider):
                             else:
                                 break
                         
+                        # Apply gain if specified
+                        if self._gain != 1.0:
+                            data *= self._gain
+
                         if self._on_data_callback:
                             # Convert to bytes for consistent interface
                             self._on_data_callback(data.tobytes())

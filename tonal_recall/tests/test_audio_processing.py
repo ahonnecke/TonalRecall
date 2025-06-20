@@ -4,14 +4,10 @@ import numpy as np
 import time
 import soundfile as sf
 import json
-import logging
-
 
 
 from tonal_recall.services.audio_providers import WavFileAudioProvider
 from tonal_recall.note_detector import NoteDetector, DetectedNote
-
-
 
 
 # Construct an absolute path to the recordings directory, which is at the project root
@@ -93,7 +89,7 @@ def test_note_detector_processes_chunk(wav_file_path=TEST_WAV_FILE):
     def on_note_detected(note: DetectedNote, signal: float):
         detected_notes.append(note)
 
-    with sf.SoundFile(wav_file_path, 'r') as f:
+    with sf.SoundFile(wav_file_path, "r") as f:
         assert f.samplerate == 48000
         assert f.channels == 1
         sample_rate = f.samplerate
@@ -104,7 +100,7 @@ def test_note_detector_processes_chunk(wav_file_path=TEST_WAV_FILE):
             channels=1,
             min_confidence=0.7,
             min_signal=0.05,  # The raw signal is already strong enough
-            min_stable_count=2  # Require two stable readings for a more robust test
+            min_stable_count=2,  # Require two stable readings for a more robust test
         )
         detector._callback = on_note_detected
         detector._running = True
@@ -114,7 +110,7 @@ def test_note_detector_processes_chunk(wav_file_path=TEST_WAV_FILE):
 
         # Process enough chunks to satisfy min_stable_count and get a detection
         for _ in range(10):
-            audio_chunk = f.read(1024, dtype='float32', always_2d=False)
+            audio_chunk = f.read(1024, dtype="float32", always_2d=False)
             if not audio_chunk.any():
                 break
 
@@ -127,7 +123,9 @@ def test_note_detector_processes_chunk(wav_file_path=TEST_WAV_FILE):
                 break
 
     assert len(detected_notes) > 0, "NoteDetector should have detected a note"
-    assert detected_notes[0].note_name == "A", f"Expected note A, but got {detected_notes[0].note_name}"
+    assert (
+        detected_notes[0].note_name == "A"
+    ), f"Expected note A, but got {detected_notes[0].note_name}"
 
 
 def get_test_cases():
@@ -142,14 +140,16 @@ def get_test_cases():
             wav_path = os.path.join(RECORDINGS_PATH, filename)
             json_path = wav_path.replace(".wav", ".json")
             if os.path.exists(json_path):
-                with open(json_path, 'r') as f:
+                with open(json_path, "r") as f:
                     metadata = json.load(f)
                     # Correct key is 'expected_note'
                     expected_note = metadata.get("expected_note")
                     if expected_note:
                         # Use the note name (e.g., "A1") as the test ID
                         test_id = os.path.splitext(os.path.basename(wav_path))[0]
-                        test_cases.append(pytest.param(wav_path, expected_note, id=test_id))
+                        test_cases.append(
+                            pytest.param(wav_path, expected_note, id=test_id)
+                        )
     return test_cases
 
 
@@ -158,41 +158,77 @@ def test_all_recorded_notes(wav_file_path, expected_note_with_octave):
     """Tests the NoteDetector against all WAV files in the recordings directory."""
     detected_notes = []
 
-    def on_note_detected(note: DetectedNote, signal: float):
-        if note.note_name:
-            detected_notes.append(note)
+    def on_note_detected(note_info: dict, signal: float) -> None:
+        """Callback function to store detected notes."""
+        if note_info:
+            detected_notes.append(note_info)
 
-    with sf.SoundFile(wav_file_path, 'r') as f:
-        sample_rate = f.samplerate
-        detector = NoteDetector(
-            sample_rate=sample_rate,
-            frames_per_buffer=1024,
-            channels=f.channels,
-            min_confidence=0.7,
-            min_signal=0.05,
-            min_stable_count=2
+    # Use the WavFileAudioProvider to stream audio with gain
+    provider = WavFileAudioProvider(
+        file_path=wav_file_path,
+        chunk_size=1024,
+        loop=False,
+        gain=5.0,  # Further reduced gain to match live signal levels
+    )
+
+    min_confidence = 0.75
+    silence_threshold_db = -45
+
+    # Use parameters from the working baseline_test, with dynamic confidence
+    detector = NoteDetector(
+        sample_rate=provider.sample_rate,
+        frames_per_buffer=1024,
+        channels=provider.channels,
+        silence_threshold_db=silence_threshold_db,
+        min_confidence=min_confidence,
+        min_signal=0.015,  # Expecting a lower signal after gain reduction
+        min_stable_count=5,
+        stability_majority=0.8,
+        tolerance=0.8,  # Use baseline's default tolerance
+    )
+    detector._callback = on_note_detected
+    detector._running = True
+
+    def process_wav_data(audio_bytes: bytes) -> None:
+        """Converts audio bytes from provider and processes them."""
+        # The provider sends bytes. NoteDetector._process_audio needs a float32 numpy array.
+        num_samples = len(audio_bytes) // (provider.channels * 4)  # 4 bytes for float32
+        if num_samples == 0:
+            return
+
+        audio_chunk = np.frombuffer(audio_bytes, dtype=np.float32).reshape(
+            num_samples, provider.channels
         )
-        detector._callback = on_note_detected
-        detector._running = True
 
-        # Seek past any initial silence. The A1 file has a longer silence.
-        seek_time_seconds = 2.1 if "A1" in wav_file_path else 0.2
-        f.seek(int(seek_time_seconds * sample_rate))
+        # Process only the first channel, as NoteDetector expects mono.
+        mono_chunk = audio_chunk[:, 0]
+        detector._process_audio(mono_chunk)
 
-        # Process several chunks
-        for _ in range(20):
-            audio_chunk = f.read(1024, dtype='float32', always_2d=False)
-            if not audio_chunk.any():
-                break
-            audio_chunk *= 0.9  # Reduce volume to prevent clipping
-            detector._process_audio(audio_chunk)
-            if detected_notes:
-                break
+        # Stop processing if a note is found. The provider is stopped in the
+        # main thread's loop to avoid a deadlock.
+        if detected_notes:
+            pass
 
-    assert len(detected_notes) > 0, f"No note detected for {os.path.basename(wav_file_path)}"
-    
+    provider.start(process_wav_data)
+
+    # Wait for the provider to finish or for a note to be detected
+    start_time = time.time()
+    while provider.is_running:
+        if time.time() - start_time > 5:  # 5-second timeout
+            provider.stop()
+            break
+        time.sleep(0.01)
+
+    assert (
+        len(detected_notes) > 0
+    ), f"No note detected for {os.path.basename(wav_file_path)}"
+
     detected_note_name = detected_notes[0].note_name
     # Strip octave number from the expected note for comparison, as octave detection is unreliable
-    expected_note_letter = ''.join(c for c in expected_note_with_octave if not c.isdigit())
-    
-    assert detected_note_name == expected_note_letter, f"Expected {expected_note_letter} but got {detected_note_name} for {os.path.basename(wav_file_path)}"
+    expected_note_letter = "".join(
+        c for c in expected_note_with_octave if not c.isdigit()
+    )
+
+    assert (
+        detected_note_name == expected_note_letter
+    ), f"Expected {expected_note_letter} but got {detected_note_name} for {os.path.basename(wav_file_path)}"
