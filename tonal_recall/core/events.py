@@ -1,6 +1,6 @@
 """Event system for Tonal Recall components."""
 
-from typing import Dict, List, Callable, Any, Optional
+from typing import Dict, List, Callable, Any
 from enum import Enum, auto
 
 from ..logger import get_logger

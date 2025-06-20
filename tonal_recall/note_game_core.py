@@ -1,6 +1,6 @@
 import time
 import random
-from typing import Optional, Dict, Any
+from typing import Optional
 from .note_detector import NoteDetector
 from .note_matcher import NoteMatcher
 from .logger import get_logger

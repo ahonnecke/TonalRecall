@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import aubio
 from collections import deque
-from typing import Optional, Dict, Deque, ClassVar, TypeAlias, Callable, Any
+from typing import Optional, Dict, Deque, ClassVar, TypeAlias, Callable
 
 from ..logger import get_logger
 from ..note_types import DetectedNote

@@ -1,7 +1,6 @@
 """Utility functions for working with musical notes and frequencies."""
 
 import numpy as np
-from typing import Tuple
 
 
 def get_note_name(freq: float, use_flats: bool = False) -> str:

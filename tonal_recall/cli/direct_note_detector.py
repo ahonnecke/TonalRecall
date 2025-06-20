@@ -4,8 +4,7 @@ Direct note detector CLI that follows the exact same pattern as the working base
 
 import time
 import argparse
-from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Optional
 
 from ..logger import get_logger
 from ..note_detector import NoteDetector, DetectedNote

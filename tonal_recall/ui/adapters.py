@@ -1,7 +1,7 @@
 """Adapters for connecting UI components to the note detection backend."""
 
 from abc import ABC, abstractmethod
-from typing import Optional, Callable, Dict, Any, List
+from typing import Callable, Dict, Any, List
 
 from ..logger import get_logger
 from ..note_types import DetectedNote

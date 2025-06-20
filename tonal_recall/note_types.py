@@ -1,8 +1,7 @@
 """Type definitions for the Tonal Recall project."""
 
-from typing import TypedDict, List, Callable, Any, Optional
+from typing import Optional
 from dataclasses import dataclass
-from enum import Enum
 
 
 @dataclass

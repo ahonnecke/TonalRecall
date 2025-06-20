@@ -6,7 +6,7 @@ between components and allow for different implementations to be swapped in and 
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Callable, Dict, Any, Protocol
+from typing import Optional, Callable
 
 from ..note_types import DetectedNote
 

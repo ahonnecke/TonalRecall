@@ -4,7 +4,6 @@ Script to check available audio devices and supported sample rates.
 """
 
 import sounddevice as sd
-import numpy as np
 
 def main():
     """Print information about audio devices."""

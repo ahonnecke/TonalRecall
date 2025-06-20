@@ -12,7 +12,7 @@ from typing import (
     Dict,
     Any,
     Deque,
-    Set,
+
     ClassVar,
     TypeAlias,
 )
@@ -37,7 +37,6 @@ class NoteDetector:
     Frequency: TypeAlias = float
     Confidence: TypeAlias = float
     SignalStrength: TypeAlias = float
-    Timestamp: TypeAlias = float
 
     # Audio configuration
     SAMPLE_RATE: ClassVar[int] = 44100  # Hz
@@ -59,9 +58,6 @@ class NoteDetector:
     # Note stability tracking
     STABILITY_WINDOW: ClassVar[int] = (
         5  # Number of consecutive detections to consider stable
-    )
-    STABILITY_THRESHOLD: ClassVar[float] = (
-        0.5  # Proportion of detections that must match to be stable
     )
 
     # Note names and music theory constants
@@ -111,16 +107,6 @@ class NoteDetector:
         "B",
     ]
 
-    # Standard tuning for a 4-string bass (E1, A1, D2, G2)
-    STANDARD_TUNING: ClassVar[List[int]] = [
-        41,
-        45,
-        50,
-        55,
-    ]  # MIDI note numbers for E1, A1, D2, G2
-
-    # Number of frets on a standard bass (typically 20-24)
-    NUM_FRETS: ClassVar[int] = 24
 
     def __init__(
         self,
