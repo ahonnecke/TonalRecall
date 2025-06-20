@@ -7,7 +7,6 @@ from typing import List
 
 from ..logger import get_logger
 from ..logging_config import setup_logging
-from ..core.config import ConfigManager
 from ..note_types import DetectedNote
 
 logger = get_logger(__name__)
