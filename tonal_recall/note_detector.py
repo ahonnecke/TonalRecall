@@ -267,7 +267,6 @@ class NoteDetector:
         self._running = True
 
         try:
-            import os
 
             # Set environment variable to use PortAudio explicitly
             os.environ["PYAUDIO_HOST"] = "portaudio"
