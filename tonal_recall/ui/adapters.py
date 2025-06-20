@@ -166,7 +166,7 @@ class PygameAdapter(UIAdapter):
             font_size = self._config.get("font_size", 36)
             try:
                 self._font = pygame.font.Font(None, font_size)
-            except:
+            except Exception:  # Broad exception for font loading
                 self._font = pygame.font.SysFont("Arial", font_size)
             
             logger.info("Pygame UI initialized")
@@ -331,7 +331,7 @@ class CursesAdapter(UIAdapter):
             key = self._stdscr.getch()
             if key == self._curses.KEY_ESCAPE or key == ord('q'):
                 return False
-        except:
+        except Exception:  # Broad exception for curses input handling
             pass
         
         return True
@@ -413,8 +413,8 @@ class CursesAdapter(UIAdapter):
             self._curses.nocbreak()
             self._curses.echo()
             self._curses.endwin()
-        except:
-            pass
+        except Exception:  # Broad exception for curses cleanup
+            pass  # Ignore errors during cleanup
     
     def _setup_event_handlers(self) -> None:
         """Set up event handlers for note detection events."""

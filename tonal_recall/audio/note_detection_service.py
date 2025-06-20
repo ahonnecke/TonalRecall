@@ -128,14 +128,6 @@ class NoteDetectionService(INoteDetectionService):
         """
         return self._note_detector.get_current_note()
         
-    def is_running(self) -> bool:
-        """Check if the note detection service is running.
-        
-        Returns:
-            True if the service is running, False otherwise
-        """
-        return self._running
-    
     def get_simple_note(self) -> Optional[str]:
         """Get just the note letter (A, B, C, etc.) without the octave.
         

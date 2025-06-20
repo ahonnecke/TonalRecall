@@ -179,8 +179,8 @@ class NoteDetector:
         self._audio_stream: Optional[sd.InputStream] = None
 
         # Note tracking state
-        self._note_history: Deque[Optional[NoteName]] = deque(maxlen=20)
-        self._current_note: Optional[NoteName] = None
+        self._note_history: Deque[Optional[str]] = deque(maxlen=20)
+        self._current_note: Optional[str] = None
         self._stable_note: Optional[DetectedNote] = (
             None  # Track the current stable note
         )

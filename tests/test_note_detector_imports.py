@@ -15,6 +15,8 @@ def test_note_detector_import():
         from tonal_recall.note_detector import NoteDetector
         from tonal_recall.note_types import DetectedNote
         print("✅ Successfully imported NoteDetector and DetectedNote")
+        assert NoteDetector is not None, "NoteDetector should be importable"
+        assert DetectedNote is not None, "DetectedNote should be importable"
         assert True  # Simple assertion to verify the test runs
     except ImportError as e:
         print(f"❌ Import Error: {e}")

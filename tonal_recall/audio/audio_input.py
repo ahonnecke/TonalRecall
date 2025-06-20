@@ -226,7 +226,7 @@ class SoundDeviceInput(AudioInputHandler):
                 if self._stream:
                     try:
                         self._stream.close()
-                    except:
+                    except Exception:  # pylint: disable=broad-except
                         pass
                     self._stream = None
         

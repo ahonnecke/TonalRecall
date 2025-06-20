@@ -8,7 +8,6 @@ from typing import List
 from ..logger import get_logger
 from ..logging_config import setup_logging
 from ..core.config import ConfigManager
-from ..core.factory import ComponentFactory
 from ..note_types import DetectedNote
 
 logger = get_logger(__name__)
@@ -83,8 +82,7 @@ def run_test(args):
     setup_logging(force_level=logging.DEBUG if args.debug else None)
     
     # Create component factory and configuration manager
-    config_manager = ConfigManager()
-    factory = ComponentFactory(config_manager)
+
     
     # List of detected notes
     detected_notes: List[DetectedNote] = []

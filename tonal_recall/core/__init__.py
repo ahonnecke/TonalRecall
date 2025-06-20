@@ -6,3 +6,5 @@ from .interfaces import (
     IAudioInput,
     INoteDetectionService,
 )
+
+__all__ = ["INoteDetector", "IAudioInput", "INoteDetectionService"]
