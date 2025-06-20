@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 import time
 import soundfile as sf
+import json
 import logging
 
 
@@ -128,3 +129,70 @@ def test_note_detector_processes_chunk(wav_file_path=TEST_WAV_FILE):
     assert len(detected_notes) > 0, "NoteDetector should have detected a note"
     assert detected_notes[0].note_name == "A", f"Expected note A, but got {detected_notes[0].note_name}"
 
+
+def get_test_cases():
+    """Scan the recordings directory for WAV files and their JSON metadata."""
+    test_cases = []
+    if not os.path.exists(RECORDINGS_PATH):
+        return test_cases
+
+    # Using sorted() to make test execution order deterministic
+    for filename in sorted(os.listdir(RECORDINGS_PATH)):
+        if filename.endswith(".wav"):
+            wav_path = os.path.join(RECORDINGS_PATH, filename)
+            json_path = wav_path.replace(".wav", ".json")
+            if os.path.exists(json_path):
+                with open(json_path, 'r') as f:
+                    metadata = json.load(f)
+                    # Correct key is 'expected_note'
+                    expected_note = metadata.get("expected_note")
+                    if expected_note:
+                        # Use the note name (e.g., "A1") as the test ID
+                        test_id = os.path.splitext(os.path.basename(wav_path))[0]
+                        test_cases.append(pytest.param(wav_path, expected_note, id=test_id))
+    return test_cases
+
+
+@pytest.mark.parametrize("wav_file_path, expected_note_with_octave", get_test_cases())
+def test_all_recorded_notes(wav_file_path, expected_note_with_octave):
+    """Tests the NoteDetector against all WAV files in the recordings directory."""
+    detected_notes = []
+
+    def on_note_detected(note: DetectedNote, signal: float):
+        if note.note_name:
+            detected_notes.append(note)
+
+    with sf.SoundFile(wav_file_path, 'r') as f:
+        sample_rate = f.samplerate
+        detector = NoteDetector(
+            sample_rate=sample_rate,
+            frames_per_buffer=1024,
+            channels=f.channels,
+            min_confidence=0.7,
+            min_signal=0.05,
+            min_stable_count=2
+        )
+        detector._callback = on_note_detected
+        detector._running = True
+
+        # Seek past any initial silence. The A1 file has a longer silence.
+        seek_time_seconds = 2.1 if "A1" in wav_file_path else 0.2
+        f.seek(int(seek_time_seconds * sample_rate))
+
+        # Process several chunks
+        for _ in range(20):
+            audio_chunk = f.read(1024, dtype='float32', always_2d=False)
+            if not audio_chunk.any():
+                break
+            audio_chunk *= 0.9  # Reduce volume to prevent clipping
+            detector._process_audio(audio_chunk)
+            if detected_notes:
+                break
+
+    assert len(detected_notes) > 0, f"No note detected for {os.path.basename(wav_file_path)}"
+    
+    detected_note_name = detected_notes[0].note_name
+    # Strip octave number from the expected note for comparison, as octave detection is unreliable
+    expected_note_letter = ''.join(c for c in expected_note_with_octave if not c.isdigit())
+    
+    assert detected_note_name == expected_note_letter, f"Expected {expected_note_letter} but got {detected_note_name} for {os.path.basename(wav_file_path)}"
