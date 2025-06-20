@@ -5,6 +5,7 @@ import aubio
 import sounddevice as sd
 import time
 from collections import deque
+import logging
 from typing import (
     Optional,
     Callable,
@@ -12,19 +13,16 @@ from typing import (
     Dict,
     Any,
     Deque,
-
     ClassVar,
     TypeAlias,
 )
 from .audio_device import find_rocksmith_adapter
 from .note_utils import get_note_name
 
-from .logger import get_logger
 from .note_types import DetectedNote
 
 # Get logger for this module
-logger = get_logger(__name__)
-
+logger = logging.getLogger(__name__)
 
 # DetectedNote class moved to types.py
 
@@ -106,7 +104,6 @@ class NoteDetector:
         "A#",
         "B",
     ]
-
 
     def __init__(
         self,
@@ -193,9 +190,11 @@ class NoteDetector:
         self._buffer_size: int = self._frames_per_buffer
 
         # Initialize aubio pitch detection
+        # The buf_size (4096) is crucial for detecting low-frequency notes accurately.
+        # The hop_size (frames_per_buffer) determines how often we analyze a new chunk.
         self._pitch_detector = aubio.pitch(
             "yin",
-            self._frames_per_buffer * 2,
+            4096,
             self._frames_per_buffer,
             self._sample_rate,
         )
@@ -357,6 +356,7 @@ class NoteDetector:
 
         # Calculate signal level (RMS)
         signal_level: float = float(np.sqrt(np.mean(audio_data**2)))
+        logger.debug(f"Signal: {signal_level:.4f}")
 
         # Skip if signal is too weak
         if signal_level < self._min_signal:
@@ -365,6 +365,7 @@ class NoteDetector:
         # Get pitch and confidence from aubio
         pitch: float = float(self._pitch_detector(audio_data)[0])
         confidence: float = float(self._pitch_detector.get_confidence())
+        logger.debug(f"Pitch: {pitch:.2f} Hz, Confidence: {confidence:.4f}")
 
         # Skip if confidence is too low or pitch is out of range
         if (
@@ -418,12 +419,12 @@ class NoteDetector:
                         )
 
                         detected_note = DetectedNote(
-                            note=note_name,
+                            timestamp=time.time(),
+                            note_name=note_name,
                             octave=octave,
                             frequency=pitch,
                             confidence=confidence,
                             signal=signal_level,
-                            timestamp=time.time(),
                             is_stable=True,
                         )
 
@@ -450,13 +451,13 @@ class NoteDetector:
                     try:
                         self._callback(
                             DetectedNote(
-                                note="",
+                                timestamp=time.time(),
+                                note_name="",
                                 octave=4,
                                 frequency=0.0,
                                 confidence=0.0,
                                 signal=0.0,
                                 is_stable=False,
-                                timestamp=time.time(),
                             ),
                             0.0,
                         )
@@ -464,7 +465,6 @@ class NoteDetector:
                         logger.error(
                             f"Error in note cleared callback: {e}", exc_info=True
                         )
-
 
     def _frequency_to_note(self, frequency: float, use_flats: bool = False) -> str:
         """Convert a frequency in Hz to the nearest note name.
@@ -706,7 +706,6 @@ class NoteDetector:
         """
         self._min_frequency = max(1.0, float(value))  # Ensure positive value
 
-
     def _find_rocksmith_adapter(self) -> tuple[Optional[int], Optional[dict[str, Any]]]:
         """Find the Rocksmith USB Guitar Adapter in the device list
 
@@ -795,7 +794,7 @@ class NoteDetector:
         """
         logger.debug(
             f"Current note history ({len(self._note_history)}): "
-            f"{[f'{n.name}({n.confidence:.2f},{n.signal:.3f})' for n in self._note_history]}"
+            f"{[f'{n.note_name}({n.confidence:.2f},{n.signal:.3f})' for n in self._note_history]}"
         )
 
         # Filter notes by frequency, confidence, and signal
@@ -823,7 +822,7 @@ class NoteDetector:
                 f"{len(valid_notes)} < {self._min_stable_count} (min_stable_count)"
             )
             if self._stable_note is not None:
-                logger.debug(f"Clearing stable note: {self._stable_note.name}")
+                logger.debug(f"Clearing stable note: {self._stable_note.note_name}")
             self._stable_note = None
             return None
 
@@ -839,7 +838,7 @@ class NoteDetector:
                     group.append(note)
                     found_group = True
                     logger.debug(
-                        f"Grouped {note.name} ({note.frequency:.1f}Hz) with "
+                        f"Grouped {note.note_name} ({note.frequency:.1f}Hz) with "
                         f"group avg {group_avg:.1f}Hz (diff: {freq_diff:.1f} < {self._group_hz}Hz)"
                     )
                     break
@@ -848,7 +847,7 @@ class NoteDetector:
             if not found_group:
                 freq_groups.append([note])
                 logger.debug(
-                    f"Created new group for {note.name} ({note.frequency:.1f}Hz)"
+                    f"Created new group for {note.note_name} ({note.frequency:.1f}Hz)"
                 )
 
         # Log all frequency groups
@@ -889,7 +888,7 @@ class NoteDetector:
 
         # Create a new note with the averaged values
         new_note = DetectedNote(
-            name=get_note_name(avg_freq),
+            note_name=get_note_name(avg_freq),
             frequency=avg_freq,
             confidence=avg_confidence,
             signal=avg_signal,
@@ -900,26 +899,26 @@ class NoteDetector:
         # Check if we had a previous stable note
         if self._stable_note is not None:
             # If the note name changed, check if it's a significant change
-            if new_note.name != self._stable_note.name:
+            if new_note.note_name != self._stable_note.note_name:
                 # Check if the frequency change is significant
                 freq_diff = abs(new_note.frequency - self._stable_note.frequency)
                 if freq_diff < self.group_hz:
                     # Not a significant change, keep the previous note
                     logger.debug(
                         f"Ignoring small frequency change: "
-                        f"{self._stable_note.name} -> {new_note.name} "
+                        f"{self._stable_note.note_name} -> {new_note.note_name} "
                         f"(diff: {freq_diff:.1f}Hz < {self._group_hz}Hz)"
                     )
                     return self._stable_note
             else:
-                if self._last_stable_note != self._stable_note.name:
+                if self._last_stable_note != self._stable_note.note_name:
                     logger.debug(
-                        f"Stable note held: {self._stable_note.name} "
+                        f"Stable note held: {self._stable_note.note_name} "
                         f"(confidence: {avg_confidence * 100:.1f}%, signal: {avg_signal:.3f})"
                     )
-                self._last_stable_note = self._stable_note.name
+                self._last_stable_note = self._stable_note.note_name
                 return DetectedNote(
-                    self._stable_note.name,
+                    self._stable_note.note_name,
                     self._stable_note.frequency,
                     avg_confidence,
                     avg_signal,
@@ -928,13 +927,13 @@ class NoteDetector:
                 )
 
         # If we get here, we have a new stable note
-        if self._last_stable_note != new_note.name:
+        if self._last_stable_note != new_note.note_name:
             logger.info(
-                f"New stable note: {new_note.name} "
+                f"New stable note: {new_note.note_name} "
                 f"({len(largest_group)}/{len(valid_notes)} votes, {avg_confidence * 100:.1f}% confidence)"
             )
 
-        self._last_stable_note = new_note.name
+        self._last_stable_note = new_note.note_name
         return new_note
 
     def _audio_callback(
@@ -1068,7 +1067,7 @@ class NoteDetector:
                 if signal_max < 0.05 and self._stable_note:
                     logger.debug(
                         f"Signal weak ({signal_max:.4f} < 0.05), "
-                        f"maintaining current note: {self._stable_note.name}"
+                        f"maintaining current note: {self._stable_note.note_name}"
                     )
                     detected_freq = self._stable_note.frequency
 
@@ -1106,7 +1105,7 @@ class NoteDetector:
                             prev_stable_note
                             and new_stable_note
                             and (
-                                prev_stable_note.name != new_stable_note.name
+                                prev_stable_note.note_name != new_stable_note.note_name
                                 or abs(
                                     prev_stable_note.confidence
                                     - new_stable_note.confidence
@@ -1117,12 +1116,12 @@ class NoteDetector:
                     )
 
                     if stable_note_changed and prev_stable_note:
-                        logger.info(f"Note released: {prev_stable_note.name}")
+                        logger.info(f"Note released: {prev_stable_note.note_name}")
                     elif not new_stable_note and not prev_stable_note and detected:
                         # Only log current note if we don't have a stable note and it's not just silence
                         self._current_note = detected
                         logger.debug(
-                            f"{current_time} | Detected: {self._current_note.name} | "
+                            f"{current_time} | Detected: {self._current_note.note_name} | "
                             f"{self._current_note.frequency:.1f} Hz | "
                             f"Conf: {self._current_note.confidence:.2f} | "
                             f"Signal: {signal_max:.4f}"
@@ -1134,7 +1133,7 @@ class NoteDetector:
                     f"{current_time} | Waiting for input | Signal: {signal_max:.4f} | dB: {db:.1f}"
                 )
         except Exception as e:
-            logger.error(f"Error in audio callback: {e}")
+            logger.error(f"Error in audio_callback: {e}", exc_info=True)
 
     def get_current_note(self) -> Optional[DetectedNote]:
         """Get the current detected note
@@ -1151,7 +1150,7 @@ class NoteDetector:
             Optional[str]: The note letter, or None if no note is detected
         """
         if getattr(self, "_stable_note", None):
-            return self._stable_note.name[0]
+            return self._stable_note.note_name[0]
         return None
 
     def is_note_playing(self, target_note: str) -> bool:

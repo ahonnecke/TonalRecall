@@ -1,166 +1,68 @@
-# Refactor
+# Refactoring Tonal Recall: A Safe, Parallel Approach
 
-This game, currently works with legacy note detection (and flashcard frontend) at this entrypoint:
-uv run python ./tonal_recall/main.py --ui pygame --difficulty 3 --duration 60
+This document outlines a stable-first strategy to refactor the Tonal Recall application. The primary goal is to decouple the core note detection logic from the UI, allowing it to be reused for different frontends. 
 
-it succesfully ingests audio, detects notes and allows the user to play a
-"flashcard" game.
+To avoid the instability of a large, intensive refactoring effort, this plan focuses on building and verifying a new, parallel system before touching the existing, working application.
 
-Basic note detection can be performed with this:
-python -m tests.note_detection.baseline_test --device 14 --duration 15
+**Guiding Principle:** Build the new system in parallel with the old one, and only switch over once it's proven to be stable.
 
-The current goal is to retain the functionality, but to refactor such that the
-detection module is seperated from the flashcard frontend.
+---
 
-Long term the goal is for this backend note detection to be able to be re-used
-for different frontend games.
+### **Revised and Improved Refactoring Plan**
 
-You absolutely cannot just jump into this and go bashing about changing things,
-there needs to be a meticulous and safe approach.
+#### **Phase 1: Build the Safety Net (Test-First)**
 
-Because testing with an instrument is time consuming, craft a plan for very
-carefully and safely extracting the note detection.
+The goal of this phase is to create the tools we need to objectively verify that our refactored code works correctly, without relying on time-consuming manual testing with an instrument.
 
-## Refactoring Plan
+1.  **Establish a "Ground Truth" Test Suite:**
+    *   Utilize the pre-recorded `.wav` files of single notes located in `/home/ahonnecke/src/tonal_recall/recordings/`.
+    *   For each `.wav` file, create a corresponding `.json` file in the same directory that contains the expected sequence of detected notes (the "ground truth").
+    *   This provides a repeatable, objective way to measure the accuracy of our note detector.
 
-### Phase 1: Analysis and Preparation (No Code Changes)
+2.  **Develop the Test Harness:**
+    *   Implement a test harness script that:
+        *   Loads a `.wav` file and its corresponding "ground truth" `.json`.
+        *   Uses a `WavFileAudioProvider` to feed audio data to the note detection logic.
+        *   Compares the actual detected notes against the ground truth.
+        *   Generates a clear report with accuracy metrics (e.g., "Test A: 95%% notes correct").
 
-1. **Map Current Architecture**
-   - Document all components and their interactions
-   - Identify dependencies between note detection and UI components
+#### **Phase 2: Build the New Service in Isolation**
 
-2. **Define Clear Interfaces**
-   - Design the interface between note detection backend and frontends
-   - Document all data structures that cross the boundary
-   - Define events and callbacks needed for communication
+Now, we build the new components completely separately from the existing game logic.
 
-3. **Create Test Harness**
-   - Develop automated tests for note detection functionality
-   - Create a simple CLI test tool that exercises core functionality
-   - Document baseline behavior for comparison after refactoring
+1.  **Define Service Contracts (Interfaces):**
+    *   Formalize `IAudioProvider` and `INoteDetectionService` abstract base classes (ABCs) in a new file, e.g., `tonal_recall/services/interfaces.py`. This defines the blueprint for our new components.
 
-### Phase 2: Separation of Concerns
+2.  **Implement `AudioProvider`s:**
+    *   Create `LiveAudioProvider` which wraps the existing `sounddevice` logic for real-time input.
+    *   Create `WavFileAudioProvider` which reads `.wav` files for the test harness.
 
-1. **Extract Core Note Detection**
-   - Move `NoteDetector` class to dedicated module without changing functionality
-   - Ensure all dependencies are properly imported
-   - Verify with test harness that functionality is preserved
+3.  **Create the `NoteDetectionService`:**
+    *   Create a new `NoteDetectionService` in a new file (`tonal_recall/services/note_detection_service.py`).
+    *   This service will encapsulate the core note detection logic. It will take an `IAudioProvider` in its constructor, immediately decoupling it from the audio source.
+    *   Run the test harness against this new service. The goal is to make the new service pass all the tests with the same or better accuracy as the original `NoteDetector`.
 
-2. **Create Facade Service**
-   - Implement `NoteDetectionService` as a facade for audio input and note detection
-   - Add configuration management for all detection parameters
-   - Implement event-based communication system
+#### **Phase 3: Create and Verify the New Entrypoints**
 
-3. **Update Audio Input**
-   - Refactor audio input to be pluggable and independent
-   - Create clear interface for different audio input implementations
-   - Ensure backward compatibility with existing code
+Instead of modifying `main.py`, we create new, separate scripts to run our new service.
 
-### Phase 3: Frontend Adaptation
+1.  **Create a Simple CLI Entrypoint for Live Testing:**
+    *   Create a new script, e.g., `tonal_recall/cli_detect.py`.
+    *   This script will initialize the `NoteDetectionService` with the `LiveAudioProvider` and simply print the detected notes to the console in real-time.
+    *   This provides a quick, simple way to verify that the entire new stack works with a live instrument, without any of the complexity of the game UI.
 
-1. **Create Adapter for Existing UI**
-   - Implement adapter that connects note detection service to existing UI
-   - Ensure all existing functionality works through the adapter
-   - Minimize changes to UI code
+2.  **Create a New Game Entrypoint (`game_v2.py`):**
+    *   Create a new file, `tonal_recall/game_v2.py`.
+    *   This file will be the entrypoint for the refactored game. It will:
+        *   Initialize the `NoteDetectionService` with the `LiveAudioProvider`.
+        *   Initialize the existing `pygame` UI from `tonal_recall/ui/pygame_ui.py`.
+        *   Create a simple "Adapter" class that listens for events from the `NoteDetectionService` and calls the appropriate methods on the `pygame` UI instance.
+    *   Now we can run `python -m tonal_recall.game_v2` to play the full game using the completely new, decoupled backend.
 
-2. **Update Main Entry Point**
-   - Modify main.py to use the new architecture
-   - Maintain all command-line options and behavior
-   - Add new options for configuration if needed
+#### **Phase 4: Deprecation and Cleanup (Future)**
 
-3. **Verify Full Functionality**
-   - Test complete system with real instruments
-   - Compare behavior to baseline documentation
-   - Fix any regressions or issues
+Only after the new `game_v2.py` entrypoint is confirmed to be stable and working correctly would we consider modifying the original code.
 
-### Phase 4: Enhancements and Documentation
-
-1. **Add Plugin System**
-   - Implement plugin architecture for extensions
-   - Create sample plugins (e.g., visualization, recording)
-   - Document plugin API
-
-2. **Improve Error Handling**
-   - Add robust error handling throughout the system
-   - Implement graceful degradation for common failures
-   - Add diagnostic logging
-
-3. **Complete Documentation**
-   - Create comprehensive API documentation
-   - Add examples for creating new frontends
-   - Document configuration options
-
-## Implementation Details
-
-### Core Components
-
-```
-tonal_recall/
-├── core/
-│   ├── note_detector.py       # Core pitch detection and note identification
-│   ├── note_types.py          # Data structures for notes and detection results
-│   └── events.py              # Event system for communication
-├── audio/
-│   ├── audio_input.py         # Abstract base class for audio input
-│   ├── sounddevice_input.py   # Implementation using sounddevice
-│   └── audio_utils.py         # Audio processing utilities
-├── services/
-│   └── note_detection_service.py  # Facade integrating audio and detection
-├── config/
-│   ├── config_manager.py      # Configuration management
-│   └── default_config.py      # Default configuration values
-├── ui/
-│   ├── adapters/
-│   │   └── pygame_adapter.py  # Adapter for pygame UI
-│   └── pygame/                # Existing pygame UI
-└── plugins/
-    ├── plugin_base.py         # Base class for plugins
-    └── visualizer_plugin.py   # Example visualization plugin
-```
-
-### Key Interfaces
-
-```python
-# Core interface for note detection
-class INoteDetector:
-    def process_audio(self, audio_data, timestamp) -> Optional[DetectedNote]: ...
-    def get_stable_note(self) -> Optional[DetectedNote]: ...
-    def set_sample_rate(self, sample_rate: int) -> None: ...
-
-# Interface for audio input
-class IAudioInput:
-    def start(self, callback) -> None: ...
-    def stop(self) -> None: ...
-    def is_running(self) -> bool: ...
-
-# Service facade
-class INoteDetectionService:
-    def start(self, callback) -> None: ...
-    def stop(self) -> None: ...
-    def get_current_note(self) -> Optional[DetectedNote]: ...
-    def configure(self, **params) -> None: ...
-```
-
-### Testing Strategy
-
-1. **Unit Tests**: For individual components
-2. **Integration Tests**: For component interactions
-3. **CLI Test Tool**: For manual testing with real instruments
-4. **Regression Tests**: To ensure existing functionality is preserved
-
-## Migration Path
-
-To ensure a smooth transition and minimize risk:
-
-1. Start with the core note detection components that were recently fixed
-2. Create the service layer without changing existing functionality
-3. Adapt the existing UI to use the new service
-4. Gradually enhance with new features
-
-## Success Criteria
-
-- All existing functionality works without regression
-- Note detection is completely separated from UI
-- New frontends can be created without modifying backend code
-- Configuration is flexible and well-documented
-- Testing is comprehensive and automated where possible
+1.  **Update Documentation:** Change the `README` and other documentation to point to the new `game_v2.py` entrypoint.
+2.  **Deprecate:** Mark `main.py` as deprecated.
+3.  **Remove:** After a period of time, the old `main.py` and its direct dependencies can be safely removed.

@@ -102,7 +102,7 @@ class NoteGame:
 
         # Store the entire DetectedNote object
         self.current_note = note
-        played_note = note.name
+        played_note = note.note_name
 
         # Track note in stats
         if played_note in self.stats["notes_played"]:
@@ -147,7 +147,6 @@ class NoteGame:
                 if self.ui:
                     self.ui.update_display(self)
 
-
     def pick_new_target(self) -> str:
         """Pick a new target note from available notes based on current difficulty"""
         old_target = self.current_target
@@ -181,13 +180,11 @@ class NoteGame:
         # Don't stop the detector here - let the UI handle cleanup
         # to avoid threading issues
 
-
     def update_display(self) -> None:
         """Update the game display"""
         # Only safe to call from main thread! (CursesUI: always, PygameUI: only from main loop)
         if self.ui:
             self.ui.update_display(self)
-
 
     def start_game(self, duration=60):
         """Start the game with the specified duration in seconds"""
@@ -234,7 +231,6 @@ class NoteGame:
             logger.error(f"Error starting game: {e}")
             self.stop_game()
             raise
-
 
     def show_stats(self) -> None:
         """Show game statistics"""
