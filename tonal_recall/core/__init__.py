@@ -5,6 +5,4 @@ from .interfaces import (
     INoteDetector,
     IAudioInput,
     INoteDetectionService,
-    INoteDetectionCallback,
-    IConfigurable,
 )

@@ -29,32 +29,4 @@ class DetectedNote:
     position: Optional[NotePosition] = None  # Position on the fretboard, if known
     octave: Optional[int] = None  # e.g. 2
 
-    def spn(self):
-        return str(f"{self.name}{self.octave}")
 
-
-class NoteDetectorConfig(TypedDict, total=False):
-    """Configuration options for the NoteDetector class."""
-
-    sample_rate: int
-    frames_per_buffer: int
-    channels: int
-    min_confidence: float
-    min_signal: float
-    min_frequency: float
-    max_frequency: float
-    stability_window: int
-    stability_threshold: float
-
-
-class NoteGameDifficulty(Enum):
-    """Difficulty levels for the note game."""
-
-    SINGLE_NOTE = 0
-    OPEN_STRINGS = 1
-    WHOLE_NOTES = 2
-    HALF_NOTES = 3
-
-
-# Audio callback type for the note detector
-AudioCallback = Callable[[List[float], int, float, Any], None]

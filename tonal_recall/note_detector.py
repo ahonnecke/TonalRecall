@@ -79,21 +79,6 @@ class NoteDetector:
         "A#",
         "B",
     ]
-    FLAT_NOTES: ClassVar[List[NoteName]] = [
-        "C",
-        "Db",
-        "D",
-        "Eb",
-        "E",
-        "F",
-        "Gb",
-        "G",
-        "Ab",
-        "A",
-        "Bb",
-        "B",
-    ]
-    NOTE_NAMES: ClassVar[List[NoteName]] = SHARP_NOTES  # Default to sharp notes
 
     # Mapping between sharp and flat note names
     SHARP_TO_FLAT: ClassVar[Dict[NoteName, NoteName]] = {
@@ -151,8 +136,6 @@ class NoteDetector:
         frames_per_buffer: Optional[int] = None,
         channels: Optional[int] = None,
         use_flats: bool = False,
-        tuning: Optional[List[int]] = None,
-        num_frets: Optional[int] = None,
     ) -> None:
         """Initialize the NoteDetector with the given parameters.
 
@@ -169,8 +152,6 @@ class NoteDetector:
             frames_per_buffer: Number of audio frames per buffer (default 1024)
             channels: Number of audio channels (1=mono, 2=stereo) (default: 1)
             use_flats: Whether to use flat note names (e.g., Bb) instead of sharps (A#)
-            tuning: MIDI note numbers for open strings (low to high) (default: standard 4-string bass)
-            num_frets: Number of frets on the instrument (default: 24)
             channels: Number of audio channels (1=mono, 2=stereo, default 1)
         """
         # Audio configuration
@@ -206,18 +187,10 @@ class NoteDetector:
 
         # Instrument configuration
         self._use_flats: bool = bool(use_flats)
-        self._tuning: List[int] = (
-            list(tuning) if tuning is not None else self.STANDARD_TUNING.copy()
-        )
-        self._num_frets: int = (
-            int(num_frets) if num_frets is not None else self.NUM_FRETS
-        )
 
         # Audio processing state
         self._device_id: Optional[int] = device_id
         self._audio_stream: Optional[sd.InputStream] = None
-        self._pitch_o: Any = None  # Will be initialized in _init_audio_device
-        self._onset_o: Any = None  # Will be initialized in _init_audio_device
 
         # Note tracking state
         self._note_history: Deque[Optional[NoteName]] = deque(maxlen=20)
@@ -228,15 +201,9 @@ class NoteDetector:
         self._last_stable_note: Optional[str] = (
             None  # Track the name of the last stable note
         )
-        self._current_confidence: float = 0.0
-        self._current_signal: float = 0.0
-        self._is_playing: bool = False
         self._running: bool = False  # Tracks if the audio stream is running
         self._callback: Optional[Callable[[DetectedNote, float], None]] = None
-        self._last_note_time: float = 0.0
-        self._note_start_time: float = 0.0
         self._stable_count: int = 0
-        self._detected_notes: Set[NoteName] = set()
         self._buffer_size: int = self._frames_per_buffer
 
         # Initialize aubio pitch detection
@@ -512,43 +479,6 @@ class NoteDetector:
                             f"Error in note cleared callback: {e}", exc_info=True
                         )
 
-    def _check_note_stability(self) -> bool:
-        """Check if the current note is stable based on recent detections.
-
-        A note is considered stable if:
-        1. We have enough recent notes to evaluate (at least min_stable_count)
-        2. The same note name appears in at least stability_majority proportion of recent notes
-
-        Returns:
-            bool: True if the current note is considered stable, False otherwise
-
-        Note:
-            This method is used internally by _process_audio to determine if a note
-            has been consistently detected and can be considered stable.
-        """
-        if not self._note_history or len(self._note_history) < self._min_stable_count:
-            return False
-
-        # Get the most recent notes up to our window size
-        recent = list(self._note_history)[-self._min_stable_count :]
-
-        # Count occurrences of each note
-        note_counts: Dict[Optional[str], int] = {}
-        for note in recent:
-            if note is not None:
-                note_counts[note] = note_counts.get(note, 0) + 1
-
-        # Find the most common note and its count
-        if not note_counts:
-            return False
-
-        most_common_note, count = max(note_counts.items(), key=lambda x: x[1])
-
-        # Calculate the proportion of the most common note
-        proportion: float = count / len(recent)
-
-        # Consider it stable if it meets our threshold
-        return proportion >= self._stability_majority
 
     def _frequency_to_note(self, frequency: float, use_flats: bool = False) -> str:
         """Convert a frequency in Hz to the nearest note name.
@@ -790,20 +720,6 @@ class NoteDetector:
         """
         self._min_frequency = max(1.0, float(value))  # Ensure positive value
 
-    def get_stability_params(self) -> dict[str, float | int]:
-        """Get all current stability parameter values"""
-        return {
-            "silence_threshold_db": self._silence_threshold_db,
-            "tolerance": self._tolerance,
-            "min_stable_count": self._min_stable_count,
-            "stability_majority": self._stability_majority,
-            "group_hz": self._group_hz,
-            "snap_percent": self._snap_percent,
-            "normal_majority": self._normal_majority,
-            "min_confidence": self._min_confidence,
-            "min_signal": self._min_signal,
-            "min_frequency": self._min_frequency,
-        }
 
     def _find_rocksmith_adapter(self) -> tuple[Optional[int], Optional[dict[str, Any]]]:
         """Find the Rocksmith USB Guitar Adapter in the device list
@@ -962,7 +878,7 @@ class NoteDetector:
         # Find the largest group of similar frequencies
         if not freq_groups:
             logger.debug("No frequency groups found")
-            self.stable_note = None
+            self._stable_note = None
             return None
 
         # Sort groups by size (largest first)

@@ -163,40 +163,4 @@ class NoteDetectionService(INoteDetectionService):
         """
         return self._running
     
-    def get_elapsed_time(self) -> float:
-        """Get the elapsed time since note detection started.
-        
-        Returns:
-            Elapsed time in seconds, or 0 if not running
-        """
-        if not self._running:
-            return 0.0
-        return time.time() - self._start_time
     
-    # Expose note detector configuration methods
-    def configure_detector(self, **params) -> None:
-        """Configure the note detector with the given parameters.
-        
-        Args:
-            **params: Parameters to set on the note detector
-        """
-        for param, value in params.items():
-            if hasattr(self._note_detector, param):
-                setattr(self._note_detector, param, value)
-            else:
-                logger.warning(f"Unknown parameter: {param}")
-    
-    def get_detector_config(self) -> Dict[str, Any]:
-        """Get the current note detector configuration.
-        
-        Returns:
-            Dictionary of parameter names and values
-        """
-        return {
-            "tolerance": self._note_detector.tolerance,
-            "min_stable_count": self._note_detector.min_stable_count,
-            "stability_majority": self._note_detector.stability_majority,
-            "group_hz": self._note_detector.group_hz,
-            "snap_percent": self._note_detector.snap_percent,
-            "min_frequency": self._note_detector.min_frequency,
-        }

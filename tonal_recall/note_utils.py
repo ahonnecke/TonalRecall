@@ -44,27 +44,3 @@ def get_note_name(freq: float, use_flats: bool = False) -> str:
     
     return f"{note_name}{octave}"
 
-
-def get_note_parts(note_name: str) -> Tuple[str, int]:
-    """Split a note name into its letter and octave components.
-
-    Args:
-        note_name: Note name with octave (e.g., 'A4', 'C#3')
-
-    Returns:
-        Tuple of (note_letter, octave_number)
-
-    Raises:
-        ValueError: If the note format is invalid
-    """
-    # Find the split between letters and numbers
-    for i, c in enumerate(note_name):
-        if c.isdigit():
-            letter_part = note_name[:i].upper()
-            octave_part = note_name[i:]
-            try:
-                return letter_part, int(octave_part)
-            except (ValueError, IndexError):
-                break
-
-    raise ValueError(f"Invalid note format: {note_name}")

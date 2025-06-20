@@ -36,36 +36,6 @@ class ComponentFactory:
             "default": NoteDetectionService,
         }
     
-    def register_note_detector(self, name: str, cls: Type[INoteDetector]) -> None:
-        """Register a note detector implementation.
-        
-        Args:
-            name: Name to register the implementation under
-            cls: Note detector class
-        """
-        self.note_detector_classes[name] = cls
-        logger.info(f"Registered note detector implementation: {name}")
-    
-    def register_audio_input(self, name: str, cls: Type[IAudioInput]) -> None:
-        """Register an audio input implementation.
-        
-        Args:
-            name: Name to register the implementation under
-            cls: Audio input class
-        """
-        self.audio_input_classes[name] = cls
-        logger.info(f"Registered audio input implementation: {name}")
-    
-    def register_note_detection_service(self, name: str, cls: Type[INoteDetectionService]) -> None:
-        """Register a note detection service implementation.
-        
-        Args:
-            name: Name to register the implementation under
-            cls: Note detection service class
-        """
-        self.note_detection_service_classes[name] = cls
-        logger.info(f"Registered note detection service implementation: {name}")
-    
     def create_note_detector(
         self, implementation: str = "default", **kwargs
     ) -> INoteDetector:

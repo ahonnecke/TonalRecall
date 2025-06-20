@@ -147,24 +147,6 @@ class NoteGame:
                 if self.ui:
                     self.ui.update_display(self)
 
-    def set_difficulty(self, level: int) -> None:
-        """Set the game difficulty level (0-4).
-
-        Args:
-            level: Difficulty level (0-4)
-                  0: Single note (test mode)
-                  1: Open strings (E, A, D, G)
-                  2: Whole notes (A, B, C, D, E, F, G)
-                  3: Half notes (chromatic scale with sharps)
-                  4: String Master - Whole notes with string specification (e.g., "B, S0")
-        """
-        self.difficulty = max(0, min(4, int(level)))  # Clamp to 0-4
-        self.available_notes = self.note_sets.get(self.difficulty, self.note_sets[3])
-        logger.info(f"Difficulty set to level {self.difficulty}")
-
-        # If game is running, pick a new target from the new note set
-        if self.running and not self.test_mode:
-            self.pick_new_target()
 
     def pick_new_target(self) -> str:
         """Pick a new target note from available notes based on current difficulty"""
@@ -199,33 +181,6 @@ class NoteGame:
         # Don't stop the detector here - let the UI handle cleanup
         # to avoid threading issues
 
-    def get_stats(self) -> Dict[str, Any]:
-        """Return game statistics"""
-        # Calculate notes per second
-        game_duration = time.time() - self.game_start_time
-        notes_per_second = (
-            self.stats["correct_notes"] / game_duration
-            if game_duration > 0 and self.stats["correct_notes"] > 0
-            else 0.0
-        )
-
-        # Update high score if current game is better
-        if notes_per_second > self.stats["high_score_nps"]:
-            self.stats["high_score_nps"] = notes_per_second
-
-        return {
-            "total_notes": self.stats["total_notes"],
-            "correct_notes": self.stats["correct_notes"],
-            "accuracy": (
-                self.stats["correct_notes"] / self.stats["total_notes"] * 100
-                if self.stats["total_notes"] > 0
-                else 0
-            ),
-            "times": self.stats["times"],
-            "notes_played": self.stats["notes_played"],
-            "notes_per_second": notes_per_second,
-            "high_score_nps": self.stats["high_score_nps"],
-        }
 
     def update_display(self) -> None:
         """Update the game display"""
@@ -233,19 +188,6 @@ class NoteGame:
         if self.ui:
             self.ui.update_display(self)
 
-    def start_test_mode(self, test_note: str, duration: int = 5) -> None:
-        """Start the game in test mode with a single note
-
-        Args:
-            test_note: The single note to test (e.g., 'C', 'G#')
-            duration: Test duration in seconds (default: 5)
-        """
-        self.test_note = test_note
-        self.test_duration = duration
-        logger.info(f"Starting test mode with note {test_note} for {duration} seconds")
-        # Set the duration on the instance so UI can access it
-        self.duration = duration
-        self.start_game(duration)
 
     def start_game(self, duration=60):
         """Start the game with the specified duration in seconds"""
@@ -293,10 +235,6 @@ class NoteGame:
             self.stop_game()
             raise
 
-    def cleanup_curses(self) -> None:
-        """Clean up curses settings"""
-        if self.ui:
-            self.ui.cleanup()
 
     def show_stats(self) -> None:
         """Show game statistics"""

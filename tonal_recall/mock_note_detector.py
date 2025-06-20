@@ -12,7 +12,3 @@ class MockNoteDetector:
 
     def stop(self):
         self.is_running = False
-
-    def simulate_note_event(self, note, signal_strength=1.0):
-        if self.callback and self.is_running:
-            self.callback(note, signal_strength)

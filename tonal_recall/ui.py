@@ -6,15 +6,6 @@ from .logger import get_logger
 logger = get_logger(__name__)
 
 
-class NoteGameUI:
-    def update_display(self, game):
-        raise NotImplementedError
-
-    def show_stats(self, game):
-        raise NotImplementedError
-
-    def cleanup(self):
-        pass
 
 
 class PygameUI:

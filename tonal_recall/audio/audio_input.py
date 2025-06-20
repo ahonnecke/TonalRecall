@@ -161,14 +161,14 @@ class SoundDeviceInput(AudioInputHandler):
             return None, None
     
     def _audio_callback(
-        self, indata: np.ndarray, frames: int, time_info: dict, status: sd.CallbackFlags
+        self, indata: np.ndarray, _frames: int, _time_info: dict, status: sd.CallbackFlags
     ) -> None:
         """Callback for processing audio data from the input stream.
         
         Args:
             indata: The input audio data as a numpy array (frames x channels)
-            frames: Number of frames in the buffer
-            time_info: Dictionary with timing information
+            _frames: Number of frames in the buffer
+            _time_info: Dictionary with timing information
             status: Status flags indicating whether input/output underflow or overflow occurred
             
         Note:

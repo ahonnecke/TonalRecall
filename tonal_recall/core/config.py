@@ -115,41 +115,4 @@ class ConfigManager:
         """
         return self.configs.get(name, {}).copy()
     
-    def update_config(self, name: str, updates: Dict[str, Any]) -> bool:
-        """Update configuration and save to file.
-        
-        Args:
-            name: Configuration name
-            updates: Dictionary of updates to apply
-            
-        Returns:
-            True if updated and saved successfully, False otherwise
-        """
-        if name not in self.configs:
-            logger.error(f"Unknown configuration: {name}")
-            return False
-        
-        # Update configuration
-        self.configs[name].update(updates)
-        
-        # Save to file
-        return self.save_config(name, self.configs[name])
     
-    def reset_config(self, name: str) -> bool:
-        """Reset configuration to default.
-        
-        Args:
-            name: Configuration name
-            
-        Returns:
-            True if reset successfully, False otherwise
-        """
-        if name not in self.default_configs:
-            logger.error(f"Unknown configuration: {name}")
-            return False
-        
-        # Reset to default
-        self.configs[name] = self.default_configs[name].copy()
-        
-        # Save to file
-        return self.save_config(name, self.configs[name])

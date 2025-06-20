@@ -22,7 +22,6 @@ class NoteDetector(INoteDetector):
     Frequency: TypeAlias = float
     Confidence: TypeAlias = float
     SignalStrength: TypeAlias = float
-    Timestamp: TypeAlias = float
     
     # Note detection settings
     DEFAULT_MIN_CONFIDENCE: ClassVar[Confidence] = 0.7  # Minimum confidence to consider a note detection valid
@@ -32,7 +31,6 @@ class NoteDetector(INoteDetector):
     
     # Note stability tracking
     STABILITY_WINDOW: ClassVar[int] = 5  # Number of consecutive detections to consider stable
-    STABILITY_THRESHOLD: ClassVar[float] = 0.5  # Proportion of detections that must match to be stable
     
     def __init__(
         self,
@@ -72,7 +70,6 @@ class NoteDetector(INoteDetector):
         # Initialize parameters
         self._sample_rate = sample_rate
         self._hop_size = hop_size
-        self._win_size = win_size
         self._tolerance = tolerance
         self._min_confidence = min_confidence
         self._min_signal = min_signal
@@ -85,32 +82,7 @@ class NoteDetector(INoteDetector):
         self._snap_percent = snap_percent
         self._harmonic_correction = harmonic_correction
         
-        # Guitar open string frequencies for reference (E2 to E4)
-        self._guitar_strings = {
-            'E2': 82.41,  # Low E (actually E2)
-            'A2': 110.00,  # A
-            'D3': 146.83,  # D
-            'G3': 196.00,  # G
-            'B3': 246.94,  # B
-            'E4': 329.63,  # High E
-        }
         
-        # Low frequency notes that might need harmonic correction
-        self._low_notes = {
-            'E1': 41.20,  # One octave below standard low E
-            'F1': 43.65,
-            'F#1': 46.25,
-            'G1': 49.00,
-            'G#1': 51.91,
-            'A1': 55.00,
-            'A#1': 58.27,
-            'B1': 61.74,
-            'C2': 65.41,
-            'C#2': 69.30,
-            'D2': 73.42,
-            'D#2': 77.78,
-            'E2': 82.41,  # Standard low E
-        }
         
         # Initialize aubio pitch detection
         self._pitch_detector = aubio.pitch("yin", self._hop_size * 2, self._hop_size, self._sample_rate)
@@ -435,12 +407,3 @@ class NoteDetector(INoteDetector):
             raise ValueError("min_frequency must be positive")
         self._min_frequency = value
     
-    def get_stability_params(self) -> Dict[str, Any]:
-        """Get all current stability parameter values."""
-        return {
-            "min_stable_count": self._min_stable_count,
-            "stability_majority": self._stability_majority,
-            "group_hz": self._group_hz,
-            "snap_percent": self._snap_percent,
-            "min_frequency": self._min_frequency,
-        }

@@ -241,15 +241,6 @@ class PygameAdapter(UIAdapter):
             self._pygame.quit()
             logger.info("Pygame UI cleaned up")
     
-    def register_note_callback(self, callback: Callable[[DetectedNote, float], None]) -> None:
-        """Register a callback for note detection events.
-        
-        Args:
-            callback: Function to call when a note is detected
-        """
-        if callback not in self._note_callbacks:
-            self._note_callbacks.append(callback)
-    
     def _setup_event_handlers(self) -> None:
         """Set up event handlers for note detection events."""
         self._events.on_note_detected(self._handle_note_detected)
