@@ -1,17 +1,16 @@
 # Refactor
 
-This game, currently works with legacy not detection at this entrypoint:
+This game, currently works with legacy note detection (and flashcard frontend) at this entrypoint:
 uv run python ./tonal_recall/main.py --ui pygame --difficulty 3 --duration 60
 
 it succesfully ingests audio, detects notes and allows the user to play a
 "flashcard" game.
 
+Basic note detection can be performed with this:
+python -m tests.note_detection.baseline_test --device 14 --duration 15
+
 The current goal is to retain the functionality, but to refactor such that the
 detection module is seperated from the flashcard frontend.
-
-That has been started here:
-There is a newly structured version here: 
-python -m tonal_recall test --duration 100 --min-confidence 0.5 --min-signal 0.001
 
 Long term the goal is for this backend note detection to be able to be re-used
 for different frontend games.
@@ -29,7 +28,6 @@ carefully and safely extracting the note detection.
 1. **Map Current Architecture**
    - Document all components and their interactions
    - Identify dependencies between note detection and UI components
-   - Create a visual diagram of the current architecture
 
 2. **Define Clear Interfaces**
    - Design the interface between note detection backend and frontends
