@@ -27,3 +27,11 @@ class DetectedNote:
     timestamp: float  # Timestamp when the note was detected
     position: Optional[NotePosition] = None  # Position on the fretboard, if known
     octave: Optional[int] = None  # e.g. 2
+
+    def __post_init__(self):
+        """Set the 'name' field to be the same as 'note_name' for compatibility."""
+        self.name = self.note_name
+
+    def __str__(self) -> str:
+        """Return a user-friendly string representation."""
+        return self.note_name
