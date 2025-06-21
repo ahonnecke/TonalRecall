@@ -17,7 +17,8 @@ from typing import (
     TypeAlias,
 )
 from .audio_device import find_rocksmith_adapter
-from .note_utils import get_note_name, get_stable_note, convert_note_notation
+from .note_utils import get_note_name, convert_note_notation
+from .detection.stability_analyzer import StabilityAnalyzer
 
 from .note_types import DetectedNote
 
@@ -165,29 +166,27 @@ class NoteDetector:
             min_frequency if min_frequency is not None else self.MIN_FREQUENCY
         )
         self._group_hz = 1.0  # Frequency grouping in Hz
-        self._snap_percent = 0.05  # Snap to note within this % of half step
-        self._normal_majority = 0.7  # % of readings required for normal note
 
         # Instrument configuration
         self._use_flats: bool = bool(use_flats)
 
+        # Stability tracking
+        self._stability_analyzer = StabilityAnalyzer(
+            min_frequency=self._min_frequency,
+            min_confidence=self._min_confidence,
+            min_signal=self._min_signal,
+            min_stable_count=self._min_stable_count,
+            group_hz=self.group_hz,
+            history_size=self.STABILITY_WINDOW,
+        )
+        self._current_stable_note: Optional[DetectedNote] = None
+        self._running: bool = False  # Tracks if the audio stream is running
+        self._callback: Optional[Callable[[DetectedNote, float], None]] = None
+        self._buffer_size: int = self._frames_per_buffer
+
         # Audio processing state
         self._device_id: Optional[int] = device_id
         self._audio_stream: Optional[sd.InputStream] = None
-
-        # Note tracking state
-        self._note_history: Deque[Optional[str]] = deque(maxlen=20)
-        self._current_note: Optional[str] = None
-        self._stable_note: Optional[DetectedNote] = (
-            None  # Track the current stable note
-        )
-        self._last_stable_note: Optional[str] = (
-            None  # Track the name of the last stable note
-        )
-        self._running: bool = False  # Tracks if the audio stream is running
-        self._callback: Optional[Callable[[DetectedNote, float], None]] = None
-        self._stable_count: int = 0
-        self._buffer_size: int = self._frames_per_buffer
 
         # Initialize aubio pitch detection
         # The buf_size (4096) is crucial for detecting low-frequency notes accurately.
@@ -736,9 +735,6 @@ class NoteDetector:
                 logger.error(f"Fallback audio initialization failed: {fallback_error}")
                 raise
 
-    def get_stable_note(self) -> Optional[DetectedNote]:
-        return get_stable_note(self)
-
     def _audio_callback(
         self, indata: np.ndarray, frames: int, stream_time: dict, status: Any
     ) -> None:
@@ -888,17 +884,19 @@ class NoteDetector:
                         False,
                         time.time(),
                     )
-                    self._note_history.append(detected)
+                    self._stability_analyzer.add_note(detected)
 
                     # Track previous stable note for change detection
-                    prev_stable_note = self._stable_note
+                    prev_stable_note = self._current_stable_note
 
                     # Get stable note
-                    new_stable_note = self.get_stable_note()
+                    new_stable_note = self._stability_analyzer.get_stable_note()
+                    self._stable_note = new_stable_note
+                    self._current_stable_note = new_stable_note
+
                     if new_stable_note:
-                        self._stable_note = new_stable_note
                         if self._callback:
-                            self._callback(self._stable_note, signal_max)
+                            self._callback(new_stable_note, signal_max)
 
                     # Log stable note changes
                     stable_note_changed = (
@@ -944,7 +942,7 @@ class NoteDetector:
         Returns:
             Optional[DetectedNote]: The current stable note, or None if no note is detected
         """
-        return getattr(self, "_stable_note", None)
+        return self._current_stable_note
 
     def get_simple_note(self) -> Optional[str]:
         """Get just the note letter (A, B, C, etc.) without the octave
@@ -952,8 +950,8 @@ class NoteDetector:
         Returns:
             Optional[str]: The note letter, or None if no note is detected
         """
-        if getattr(self, "_stable_note", None):
-            return self._stable_note.note_name[0]
+        if self._current_stable_note:
+            return self._current_stable_note.note_name[0]
         return None
 
     def is_note_playing(self, target_note: str) -> bool:
