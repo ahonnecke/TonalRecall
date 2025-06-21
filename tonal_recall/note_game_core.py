@@ -12,6 +12,25 @@ logger = get_logger(__name__)
 
 
 class NoteGame:
+    note_sets = {
+        0: ["F"],  # Single note (test mode), will be replaced by TEST_NOTE in __init__
+        1: ["E", "A", "D", "G"],  # Open strings
+        2: ["A", "B", "C", "D", "E", "F", "G"],  # Whole notes
+        3: [
+            "A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#",
+        ],
+        4: [
+            "E1", "F1", "F#1", "G1", "G#1", "A2", "A#2", "B2", "C2", "C#2",
+            "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A3", "A#3", "B3",
+            "C3", "C#3", "D3", "D#3", "E3", "F3", "F#3", "G3", "G#3",
+        ],
+        5: [
+            "E1", "F1", "F#1", "G1", "G#1", "A2", "A#2", "B2", "C2", "C#2",
+            "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A3", "A#3", "B3",
+            "C3", "C#3", "D3", "D#3", "E3", "F3", "F#3", "G3", "G#3",
+            "B4", "C4", "C#4", "D4", "D#4",
+        ],
+    }
     """A simple game to practice playing notes on a guitar or bass"""
 
     def __init__(
@@ -57,48 +76,10 @@ class NoteGame:
         }
         self.TEST_NOTE = "F"
 
-        # Set difficulty level (0-4)
-        self.difficulty = max(0, min(4, int(difficulty)))  # Clamp to 0-4
+        # Set difficulty level
+        self.difficulty = max(0, min(max(self.note_sets.keys()), int(difficulty)))
 
-        # Define note sets for each difficulty level
-        self.note_sets = {
-            0: [self.TEST_NOTE],  # Single note (test mode)
-            1: ["E", "A", "D", "G"],  # Open strings
-            2: ["A", "B", "C", "D", "E", "F", "G"],  # Whole notes
-            3: [
-                "A",
-                "A#",
-                "B",
-                "C",
-                "C#",
-                "D",
-                "D#",
-                "E",
-                "F",
-                "F#",
-                "G",
-                "G#",
-            ],
-            4: [
-                "E1",
-                "F1",
-                "F#1",
-                "G1",
-                "G#1",
-                "A2",
-                "A#2",
-                "B2",
-                "C2",
-                "C#2",
-                "D2",
-                "D#2",
-                "E2",
-                "F2",
-                "F#2",
-                "G2",
-                "G#2",
-            ],
-        }
+        self.note_sets[0] = [self.TEST_NOTE]
 
         # Set available notes based on difficulty
         self.available_notes = self.note_sets.get(
@@ -156,7 +137,7 @@ class NoteGame:
         # Use NoteMatcher to check if the played note matches the target
         target_note = self.current_target
         match_result = self.note_matcher.match(
-            target_note, played_note_full, match_octave=self.difficulty == 4
+            target_note, played_note_full, match_octave=self.difficulty >= 4
         )
 
         logger.debug(
@@ -215,7 +196,7 @@ class NoteGame:
         """Update the game display"""
         # Only safe to call from main thread! (CursesUI: always, PygameUI: only from main loop)
         if self.ui:
-            self.ui.update_display(self, show_octave=(self.difficulty == 4))
+            self.ui.update_display(self, show_octave=(self.difficulty >= 4))
 
     def start_game(self, duration=60):
         """Start the game with the specified duration in seconds"""

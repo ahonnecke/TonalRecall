@@ -21,13 +21,17 @@ def parse_arguments():
         choices=["pygame", "curses"],
         help="UI to use (default: pygame)",
     )
+
+    # Dynamically set the choices for difficulty from the NoteGame class
+    difficulty_levels = sorted(NoteGame.note_sets.keys())
     parser.add_argument(
         "--difficulty",
         type=int,
         default=3,
-        choices=range(0, 5),
-        help="Game difficulty level: 0=Single note, 1=Open strings, 2=Whole notes, 3=Half notes, 4=String Master (default: 3)",
+        choices=difficulty_levels,
+        help=f"Game difficulty level from {min(difficulty_levels)} to {max(difficulty_levels)}. (default: 3)",
     )
+
     parser.add_argument(
         "--duration",
         type=int,
