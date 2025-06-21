@@ -1,6 +1,6 @@
 # Refactoring Tonal Recall: A Safe, Parallel Approach
 
-This document outlines a stable-first strategy to refactor the Tonal Recall application. The primary goal is to decouple the core note detection logic from the UI, allowing it to be reused for different frontends. 
+This document outlines a stable-first strategy to refactor the Tonal Recall application. The primary goal is to decouple the core note detection logic from the UI, allowing it to be reused for different frontends.
 
 To avoid the instability of a large, intensive refactoring effort, this plan focuses on building and verifying a new, parallel system before touching the existing, working application.
 

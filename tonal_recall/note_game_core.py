@@ -55,7 +55,7 @@ class NoteGame:
             "notes_per_second": 0.0,
             "high_score_nps": 0.0,
         }
-        self.TEST_NOTE = "F#"
+        self.TEST_NOTE = "F"
 
         # Set difficulty level (0-4)
         self.difficulty = max(0, min(4, int(difficulty)))  # Clamp to 0-4

@@ -5,6 +5,7 @@ This script uses LiveAudioProvider and NoteDetector to capture and identify
 musical notes from an audio input device in real-time. It's designed for
 quick, clean verification of the note detection system.
 """
+
 import time
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ from tonal_recall.services.audio_providers import LiveAudioProvider
 from tonal_recall.util.logs import get_logger
 
 logger = get_logger(__name__)
+
 
 class BaselineTester:
     """A simple class to test live note detection."""
@@ -44,7 +46,7 @@ class BaselineTester:
             device_id=self.device_id,
             sample_rate=48000,
             channels=1,
-            callback=self._audio_data_handler
+            callback=self._audio_data_handler,
         )
 
         # Initialize the note detector
@@ -53,10 +55,12 @@ class BaselineTester:
             callback=self.note_callback,
             min_confidence=0.80,
             min_stable_count=4,
-            harmonic_correction=True
+            harmonic_correction=True,
         )
 
-    def _audio_data_handler(self, indata: np.ndarray, frames: int, time_info, status) -> None:
+    def _audio_data_handler(
+        self, indata: np.ndarray, frames: int, time_info, status
+    ) -> None:
         """Handles raw audio data from the LiveAudioProvider."""
         try:
             audio_data = np.frombuffer(indata, dtype=np.float32)
@@ -69,7 +73,7 @@ class BaselineTester:
     def note_callback(self, detected_note: DetectedNote) -> None:
         """Callback for detected notes, printing only new stable notes."""
         self.detected_notes.append(detected_note)
-        
+
         if detected_note.is_stable and detected_note.note_name != self.last_note_name:
             self.last_note_name = detected_note.note_name
             print(f"[STABLE] {detected_note.note_name}")
@@ -78,12 +82,12 @@ class BaselineTester:
         """Run the baseline test."""
         print("\n=== Guitar Note Detection Test ===")
         print(f"Listening for {duration:.1f} seconds on device {self.device_id}...\n")
-        
+
         self.detected_notes = []
         self.test_start_time = time.time()
-        
+
         self.audio_provider.start()
-        
+
         try:
             time.sleep(duration)
         except KeyboardInterrupt:
@@ -97,11 +101,11 @@ class BaselineTester:
         """Prints a summary of the test results."""
         print("\n=== Test Complete ===")
         print(f"Ran for {self.test_duration:.1f} seconds.")
-        
-        stable_notes = sorted(list(set(
-            note.note_name for note in self.detected_notes if note.is_stable
-        )))
-        
+
+        stable_notes = sorted(
+            list(set(note.note_name for note in self.detected_notes if note.is_stable))
+        )
+
         if stable_notes:
             print(f"Stable notes detected: {', '.join(stable_notes)}")
         else:
@@ -113,16 +117,28 @@ def list_audio_devices() -> None:
     print("\nAvailable audio input devices:")
     devices = sd.query_devices()
     for i, device in enumerate(devices):
-        if device['max_input_channels'] > 0:
-            print(f"{i}: {device['name']} (Sample Rate: {device['default_samplerate'] / 1000:.1f}kHz)")
+        if device["max_input_channels"] > 0:
+            print(
+                f"{i}: {device['name']} (Sample Rate: {device['default_samplerate'] / 1000:.1f}kHz)"
+            )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Run a simple live note detection test.')
-    parser.add_argument('--device', type=int, help='Audio device ID. Required to run the test.')
-    parser.add_argument('--duration', type=float, default=10.0, help='Test duration in seconds.')
-    parser.add_argument('--list-devices', action='store_true', help='List available audio devices and exit.')
-    
+    parser = argparse.ArgumentParser(
+        description="Run a simple live note detection test."
+    )
+    parser.add_argument(
+        "--device", type=int, help="Audio device ID. Required to run the test."
+    )
+    parser.add_argument(
+        "--duration", type=float, default=10.0, help="Test duration in seconds."
+    )
+    parser.add_argument(
+        "--list-devices",
+        action="store_true",
+        help="List available audio devices and exit.",
+    )
+
     args = parser.parse_args()
 
     if args.list_devices:
@@ -133,6 +149,6 @@ if __name__ == "__main__":
         list_audio_devices()
         print("\nPlease specify the device ID with the --device argument.")
         sys.exit(1)
-    
+
     tester = BaselineTester(device_id=args.device)
     tester.run_test(duration=args.duration)

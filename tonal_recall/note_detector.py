@@ -269,7 +269,6 @@ class NoteDetector:
         self._running = True
 
         try:
-
             # Set environment variable to use PortAudio explicitly
             os.environ["PYAUDIO_HOST"] = "portaudio"
 
@@ -794,6 +793,50 @@ class NoteDetector:
                     f"Pitch selection - method: {detected_method}, confidence: {confidence:.2f}, "
                     f"aubio: {pitch:.1f}Hz, fft: {dom_freq:.1f}Hz"
                 )
+
+                # Octave error correction for low notes
+                # If the detected frequency is in a range where it might be a harmonic (e.g., 80-150 Hz for bass)
+                # check for energy at the sub-harmonic frequency (half the detected frequency).
+                if 70 < detected_freq < 150:
+                    sub_harmonic_freq = detected_freq / 2.0
+
+                    # Define a small window around the sub-harmonic to check for energy
+                    tolerance_hz = 2.0
+                    sub_harmonic_min = sub_harmonic_freq - tolerance_hz
+                    sub_harmonic_max = sub_harmonic_freq + tolerance_hz
+
+                    # Find the energy in the sub-harmonic range within the FFT spectrum
+                    sub_harmonic_indices = np.where(
+                        (bass_freqs >= sub_harmonic_min)
+                        & (bass_freqs <= sub_harmonic_max)
+                    )
+                    if len(sub_harmonic_indices[0]) > 0:
+                        sub_harmonic_energy = np.sum(
+                            bass_magnitude[sub_harmonic_indices]
+                        )
+
+                        # Find the energy of the originally detected peak
+                        peak_indices = np.where(
+                            (bass_freqs >= detected_freq - tolerance_hz)
+                            & (bass_freqs <= detected_freq + tolerance_hz)
+                        )
+                        peak_energy = (
+                            np.sum(bass_magnitude[peak_indices])
+                            if len(peak_indices[0]) > 0
+                            else 0
+                        )
+
+                        # If the sub-harmonic energy is significant (e.g., > 30% of the peak's energy), it's likely an octave error.
+                        if peak_energy > 0 and sub_harmonic_energy > (
+                            peak_energy * 0.3
+                        ):
+                            logger.debug(
+                                f"Octave error detected. Original: {detected_freq:.1f}Hz. "
+                                f"Found significant sub-harmonic energy ({sub_harmonic_energy:.2f}) "
+                                f"at ~{sub_harmonic_freq:.1f}Hz compared to peak energy ({peak_energy:.2f}). "
+                                f"Correcting pitch."
+                            )
+                            detected_freq = sub_harmonic_freq
 
                 # If signal is weak (below 0.05), maintain the current stable note
                 # This prevents jumping between notes during decay

@@ -32,12 +32,16 @@ class INoteDetector(ABC):
     """Interface for note detection algorithms."""
 
     @abstractmethod
-    def process_audio(self, audio_data: np.ndarray, timestamp: float) -> Optional[DetectedNote]:
+    def process_audio(
+        self, audio_data: np.ndarray, timestamp: float
+    ) -> Optional[DetectedNote]:
         """Process a chunk of audio data and return a detected note if found."""
         pass
 
     @abstractmethod
-    def set_callback(self, callback: Optional[Callable[[DetectedNote, float], None]]) -> None:
+    def set_callback(
+        self, callback: Optional[Callable[[DetectedNote, float], None]]
+    ) -> None:
         """Set a callback to be invoked when a note is detected."""
         pass
 

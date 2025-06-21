@@ -2,8 +2,14 @@ from typing import Optional, Callable
 import numpy as np
 
 from tonal_recall.note_detector import NoteDetector
+
 # This is the service-level, simplified note DTO
-from tonal_recall.services.interfaces import (IAudioProvider, INoteDetectionService, DetectedNote)
+from tonal_recall.services.interfaces import (
+    IAudioProvider,
+    INoteDetectionService,
+    DetectedNote,
+)
+
 # This is the detector's internal, more detailed note object
 from tonal_recall.note_types import DetectedNote as DetectorNote
 
@@ -13,7 +19,9 @@ class NoteDetectionService(INoteDetectionService):
 
     def __init__(self, audio_provider: IAudioProvider, **config) -> None:
         self._audio_provider = audio_provider
-        self._on_note_detected: Optional[Callable[[Optional[DetectedNote]], None]] = None
+        self._on_note_detected: Optional[Callable[[Optional[DetectedNote]], None]] = (
+            None
+        )
 
         # The actual note detector is now an internal implementation detail.
         self._detector = NoteDetector(sample_rate=audio_provider.sample_rate, **config)
@@ -26,7 +34,9 @@ class NoteDetectionService(INoteDetectionService):
             note_object = None
             if note and note.note_name:
                 # Adapt from the detector's detailed object to the service's simple DTO
-                note_object = DetectedNote(note.note_name, note.frequency, note.confidence)
+                note_object = DetectedNote(
+                    note.note_name, note.frequency, note.confidence
+                )
             self._on_note_detected(note_object)
 
     def start(self, on_note_detected: Callable[[Optional[DetectedNote]], None]) -> None:

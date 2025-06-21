@@ -34,7 +34,7 @@ uv run python ./tonal_recall/main.py --difficulty 3 --duration 10
 
 Choose the difficulty that matches your skill level:
 
-- **🎵 Level 1 (Beginner):** 
+- **🎵 Level 1 (Beginner):**
   - Only open bass note (E, A, D, G)
 
 - **🎸 Level 2 (Intermediate):**

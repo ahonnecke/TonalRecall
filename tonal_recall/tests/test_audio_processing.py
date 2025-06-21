@@ -99,12 +99,12 @@ def test_all_recorded_notes_with_service(wav_file_path, expected_note_with_octav
         if service:
             service.stop()
 
-    assert (
-        len(detected_notes) > 0
-    ), f"No note detected for {os.path.basename(wav_file_path)}"
+    assert len(detected_notes) > 0, (
+        f"No note detected for {os.path.basename(wav_file_path)}"
+    )
 
     detected_note_name = detected_notes[0].note_name
 
-    assert (
-        detected_note_name == expected_note_with_octave
-    ), f"Expected {expected_note_with_octave} but got {detected_note_name} for {os.path.basename(wav_file_path)}"
+    assert detected_note_name == expected_note_with_octave, (
+        f"Expected {expected_note_with_octave} but got {detected_note_name} for {os.path.basename(wav_file_path)}"
+    )

@@ -44,6 +44,7 @@ def setup_game_and_ui(args):
     # Initialize UI based on command line argument
     if args.ui.lower() == "curses":
         from tonal_recall.ui import CursesUI
+
         ui = CursesUI()
     else:
         ui = PygameUI()
@@ -58,6 +59,7 @@ def setup_game_and_ui(args):
         "notes_played": {},
     }
     return game, ui
+
 
 def main():
     # Parse command line arguments

@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 class NoteDetectorCLI:
     """Command-line interface for note detection."""
-    
+
     def __init__(
         self,
         test_duration: float = 15.0,
@@ -24,7 +24,7 @@ class NoteDetectorCLI:
         min_signal: float = 0.005,
     ) -> None:
         """Initialize the CLI.
-        
+
         Args:
             test_duration: Duration of the test in seconds
             device_id: Audio input device ID, or None to auto-detect
@@ -37,7 +37,7 @@ class NoteDetectorCLI:
         self.use_flats = use_flats
         self.min_confidence = min_confidence
         self.min_signal = min_signal
-        
+
         # Create the note detection service
         self.service = NoteDetectionService(
             device_id=device_id,
@@ -45,29 +45,29 @@ class NoteDetectorCLI:
             min_confidence=min_confidence,
             min_signal=min_signal,
         )
-    
+
     def run_test(self) -> None:
         """Run a note detection test for the specified duration."""
         print("\n=== Guitar Note Detection Baseline Test ===\n")
         print("Play each open string (E2, A2, D3, G3, B3, E4) during the test.")
         print(f"Test will run for {self.test_duration} seconds.\n")
-        
+
         print("Starting note detector...")
-        
+
         # Set up logging to display detected notes
         self.detected_notes = []
-        
+
         # Start the note detection service
         try:
             self.service.start(self._note_callback)
-            
+
             # Print test information
             start_time = time.strftime("%Y-%m-%d %H:%M:%S")
             print("\n=== TEST STARTED ===")
             print(f"Start time: {start_time}")
             print(f"Listening for {self.test_duration} seconds...")
             print("Play each open string at least once during this time.\n")
-            
+
             try:
                 # Wait for the test duration
                 time.sleep(self.test_duration)
@@ -76,13 +76,14 @@ class NoteDetectorCLI:
         except Exception as e:
             print(f"\nError starting note detector: {e}")
             import traceback
+
             print(traceback.format_exc())
         finally:
             # Stop the note detection service
             if self.service.is_running():
                 self.service.stop()
             print("\n=== TEST COMPLETED ===")
-            
+
             # Print summary
             if self.detected_notes:
                 print(f"\nDetected {len(self.detected_notes)} notes.")
@@ -92,32 +93,38 @@ class NoteDetectorCLI:
                     if note.name not in note_counts:
                         note_counts[note.name] = 0
                     note_counts[note.name] += 1
-                
+
                 print("\nNote distribution:")
                 for note, count in sorted(note_counts.items()):
                     print(f"  {note}: {count} times")
             else:
-                print("\nNo notes were detected. Try adjusting the sensitivity or check your audio input.")
-                print("You may need to increase the volume or reduce the minimum confidence threshold.")
+                print(
+                    "\nNo notes were detected. Try adjusting the sensitivity or check your audio input."
+                )
+                print(
+                    "You may need to increase the volume or reduce the minimum confidence threshold."
+                )
                 print("Current settings:")
                 print(f"  Minimum confidence: {self.min_confidence}")
                 print(f"  Minimum signal: {self.min_signal}")
                 print(f"  Use flats: {self.use_flats}")
                 print("\nTry running with: --min-confidence 0.5 --min-signal 0.001")
-    
+
     def _note_callback(self, note: DetectedNote, elapsed: float) -> None:
         """Callback for detected notes.
-        
+
         Args:
             note: The detected note
             elapsed: Elapsed time since the test started
         """
         # Store the note for later analysis
         self.detected_notes.append(note)
-        
+
         # Format and print the detected note
-        print(f"[{elapsed:.2f}s] {note.name} ({note.frequency:.1f}Hz, conf: {note.confidence:.2f}, signal: {note.signal:.4f})")
-        
+        print(
+            f"[{elapsed:.2f}s] {note.name} ({note.frequency:.1f}Hz, conf: {note.confidence:.2f}, signal: {note.signal:.4f})"
+        )
+
         # Flush stdout to ensure immediate display
         sys.stdout.flush()
 
@@ -140,9 +147,9 @@ def main() -> None:
     parser.add_argument(
         "--min-signal", type=float, default=0.005, help="Minimum signal threshold"
     )
-    
+
     args = parser.parse_args()
-    
+
     # Create and run the CLI
     cli = NoteDetectorCLI(
         test_duration=args.duration,

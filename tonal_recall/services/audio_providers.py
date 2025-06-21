@@ -7,9 +7,13 @@ from typing import Callable, Optional
 
 from tonal_recall.services.interfaces import IAudioProvider
 
+
 class LiveAudioProvider(IAudioProvider):
     """Provides live audio from an input device using sounddevice."""
-    def __init__(self, device_id: int, sample_rate: int, channels: int, chunk_size: int):
+
+    def __init__(
+        self, device_id: int, sample_rate: int, channels: int, chunk_size: int
+    ):
         self._device_id = device_id
         self._sample_rate = sample_rate
         self._channels = channels
@@ -25,7 +29,7 @@ class LiveAudioProvider(IAudioProvider):
             samplerate=self._sample_rate,
             blocksize=self._chunk_size,
             callback=self._audio_callback,
-            dtype='float32' # Standard for audio processing
+            dtype="float32",  # Standard for audio processing
         )
         self._stream.start()
 
@@ -35,7 +39,9 @@ class LiveAudioProvider(IAudioProvider):
             self._stream.close()
             self._stream = None
 
-    def _audio_callback(self, indata: np.ndarray, frames: int, time_info, status) -> None:
+    def _audio_callback(
+        self, indata: np.ndarray, frames: int, time_info, status
+    ) -> None:
         if status:
             print(status, flush=True)
         if self._on_data_callback:
@@ -50,9 +56,13 @@ class LiveAudioProvider(IAudioProvider):
     def channels(self) -> int:
         return self._channels
 
+
 class WavFileAudioProvider(IAudioProvider):
     """Provides audio data by reading from a WAV file."""
-    def __init__(self, file_path: str, chunk_size: int, loop: bool = False, gain: float = 1.0):
+
+    def __init__(
+        self, file_path: str, chunk_size: int, loop: bool = False, gain: float = 1.0
+    ):
         self._file_path = file_path
         self._chunk_size = chunk_size
         self._loop = loop
@@ -90,14 +100,14 @@ class WavFileAudioProvider(IAudioProvider):
             try:
                 with sf.SoundFile(self._file_path) as f:
                     while self._is_running:
-                        data = f.read(self._chunk_size, dtype='float32', always_2d=True)
+                        data = f.read(self._chunk_size, dtype="float32", always_2d=True)
                         if len(data) == 0:
                             if self._loop:
                                 f.seek(0)
                                 continue
                             else:
                                 break
-                        
+
                         # Apply gain if specified
                         if self._gain != 1.0:
                             data *= self._gain
@@ -105,18 +115,18 @@ class WavFileAudioProvider(IAudioProvider):
                         if self._on_data_callback:
                             # Convert to bytes for consistent interface
                             self._on_data_callback(data.tobytes())
-                        
+
                         # Simulate real-time playback speed
                         time.sleep(self._chunk_size / self.sample_rate)
 
                 if not self._loop:
-                    break # Exit outer loop if not looping
+                    break  # Exit outer loop if not looping
 
             except Exception as e:
                 print(f"Error streaming WAV file: {e}")
                 break
-        
-        self._is_running = False # Ensure flag is reset on exit
+
+        self._is_running = False  # Ensure flag is reset on exit
 
     @property
     def sample_rate(self) -> int:

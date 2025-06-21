@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Callable
 
+
 # Assuming the existence of a simple data structure for a detected note.
 # This will be defined more concretely later.
 class DetectedNote:
@@ -12,8 +13,10 @@ class DetectedNote:
     def __repr__(self):
         return f"DetectedNote(note='{self.note_name}', freq={self.frequency:.2f}, conf={self.confidence:.2f})"
 
+
 class IAudioProvider(ABC):
     """An abstract interface for audio providers."""
+
     @abstractmethod
     def start(self, on_data_callback: Callable[[bytes], None]) -> None:
         """Starts the audio stream, calling the callback with chunks of audio data."""
@@ -36,8 +39,10 @@ class IAudioProvider(ABC):
         """The number of channels in the audio stream."""
         pass
 
+
 class INoteDetectionService(ABC):
     """An abstract interface for a note detection service."""
+
     @abstractmethod
     def start(self, on_note_detected: Callable[[Optional[DetectedNote]], None]) -> None:
         """Starts the note detection service."""

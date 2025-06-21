@@ -6,8 +6,6 @@ from .logger import get_logger
 logger = get_logger(__name__)
 
 
-
-
 class PygameUI:
     """Pygame-based UI for Tonal Recall"""
 
@@ -116,7 +114,11 @@ class PygameUI:
                 note_name = played_note.name
             else:  # It's a string
                 position_info = ""
-                note_name = played_note.note_name if hasattr(played_note, 'note_name') else str(played_note)
+                note_name = (
+                    played_note.note_name
+                    if hasattr(played_note, "note_name")
+                    else str(played_note)
+                )
 
             note_str = f"You played: {note_name}{position_info}"
             note_surface = self.medium_font.render(note_str, True, self.secondary_color)

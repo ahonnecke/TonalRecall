@@ -11,18 +11,20 @@ from .direct_note_detector import run_direct_test
 
 def main(args: Optional[List[str]] = None) -> int:
     """Main entry point for the CLI.
-    
+
     Args:
         args: Command line arguments, or None to use sys.argv
-        
+
     Returns:
         Exit code (0 for success, non-zero for error)
     """
     parser = argparse.ArgumentParser(description="Tonal Recall - Guitar Note Detection")
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
-    
+
     # Note detection test command (legacy)
-    test_parser = subparsers.add_parser("test", help="Run note detection test (legacy implementation)")
+    test_parser = subparsers.add_parser(
+        "test", help="Run note detection test (legacy implementation)"
+    )
     test_parser.add_argument(
         "--duration", type=float, default=15.0, help="Test duration in seconds"
     )
@@ -38,9 +40,11 @@ def main(args: Optional[List[str]] = None) -> int:
     test_parser.add_argument(
         "--min-signal", type=float, default=0.005, help="Minimum signal threshold"
     )
-    
+
     # Note detection test command (refactored)
-    test_refactored_parser = subparsers.add_parser("test-refactored", help="Run note detection test (refactored implementation)")
+    test_refactored_parser = subparsers.add_parser(
+        "test-refactored", help="Run note detection test (refactored implementation)"
+    )
     test_refactored_parser.add_argument(
         "--duration", type=float, default=10.0, help="Test duration in seconds"
     )
@@ -57,14 +61,19 @@ def main(args: Optional[List[str]] = None) -> int:
         "--min-signal", type=float, default=0.001, help="Minimum signal threshold"
     )
     test_refactored_parser.add_argument(
-        "--harmonic-correction", type=bool, default=True, help="Enable harmonic correction for low notes"
+        "--harmonic-correction",
+        type=bool,
+        default=True,
+        help="Enable harmonic correction for low notes",
     )
     test_refactored_parser.add_argument(
         "--debug", action="store_true", help="Enable debug logging"
     )
-    
+
     # Direct note detection test command (using original working approach)
-    test_direct_parser = subparsers.add_parser("test-direct", help="Run note detection test (direct implementation)")
+    test_direct_parser = subparsers.add_parser(
+        "test-direct", help="Run note detection test (direct implementation)"
+    )
     test_direct_parser.add_argument(
         "--duration", type=float, default=10.0, help="Test duration in seconds"
     )
@@ -78,10 +87,9 @@ def main(args: Optional[List[str]] = None) -> int:
         "--min-signal", type=float, default=0.001, help="Minimum signal threshold"
     )
 
-    
     # Parse arguments
     parsed_args = parser.parse_args(args)
-    
+
     # Handle commands
     if parsed_args.command == "test":
         # Legacy implementation
@@ -102,12 +110,12 @@ def main(args: Optional[List[str]] = None) -> int:
             device_id=parsed_args.device,
             duration=parsed_args.duration,
             min_confidence=parsed_args.min_confidence,
-            min_signal=parsed_args.min_signal
+            min_signal=parsed_args.min_signal,
         )
     else:
         parser.print_help()
         return 1
-    
+
     return 0
 
 
