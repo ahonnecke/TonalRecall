@@ -671,21 +671,6 @@ class NoteDetector:
         """
         self._min_frequency = max(1.0, float(value))  # Ensure positive value
 
-    def _find_rocksmith_adapter(self) -> tuple[Optional[int], Optional[dict[str, Any]]]:
-        """Find the Rocksmith USB Guitar Adapter in the device list
-
-        Returns:
-            tuple: (device_id: Optional[int], device_info: Optional[dict[str, Any]]) - The device ID and info if found,
-                  or (None, None) if not found
-        """
-        devices = sd.query_devices()
-        for i, dev in enumerate(devices):
-            if "rocksmith" in dev["name"].lower() and dev["max_input_channels"] > 0:
-                logger.info(f"Found Rocksmith adapter: {dev['name']} (ID: {i})")
-                return i, dev
-        logger.warning("Rocksmith adapter not found, using default input device")
-        return None, None
-
     def _init_audio_device(self) -> None:
         """Initialize the audio input device.
 
