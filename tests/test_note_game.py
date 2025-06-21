@@ -23,6 +23,7 @@ class TestNoteGame(unittest.TestCase):
         game.current_target = sharp_note_name
         note = DummyNote(game.current_target)
         game.note_detected_callback(note, 1.0)
+        game.process_events()
 
         # The key in stats should be the full note name, "G#", not "G"
         self.assertIn(sharp_note_name, game.stats["notes_played"])
@@ -33,6 +34,7 @@ class TestNoteGame(unittest.TestCase):
         game.current_target = natural_note_name
         note = DummyNote(game.current_target)
         game.note_detected_callback(note, 1.0)
+        game.process_events()
         self.assertIn(natural_note_name, game.stats["notes_played"])
         self.assertEqual(game.stats["notes_played"][natural_note_name], 1)
 
@@ -43,6 +45,7 @@ class TestNoteGame(unittest.TestCase):
         note = DummyNote("A#")
         # Should not throw or update stats
         game.note_detected_callback(note, 1.0)
+        game.process_events()
         self.assertEqual(game.stats["correct_notes"], 0)
 
 

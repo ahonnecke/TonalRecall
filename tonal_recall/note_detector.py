@@ -4,7 +4,6 @@ import numpy as np
 import aubio
 import sounddevice as sd
 import time
-from collections import deque
 import logging
 from typing import (
     Optional,
@@ -12,7 +11,6 @@ from typing import (
     List,
     Dict,
     Any,
-    Deque,
     ClassVar,
     TypeAlias,
 )
@@ -39,7 +37,7 @@ class NoteDetector:
 
     # Audio configuration
     SAMPLE_RATE: ClassVar[int] = 44100  # Hz
-    FRAMES_PER_BUFFER: ClassVar[int] = 1024  # Number of frames per buffer
+    FRAMES_PER_BUFFER: ClassVar[int] = 4096  # Number of frames per buffer
     CHANNELS: ClassVar[int] = 1  # Mono audio
 
     # Note detection settings
@@ -189,12 +187,16 @@ class NoteDetector:
         self._audio_stream: Optional[sd.InputStream] = None
 
         # Initialize aubio pitch detection
-        # The buf_size (4096) is crucial for detecting low-frequency notes accurately.
-        # The hop_size (frames_per_buffer) determines how often we analyze a new chunk.
+        # The buf_size (win_s) is crucial for detecting low-frequency notes accurately.
+        # The hop_size (hop_s) determines how often we analyze a new chunk.
+        win_s = self._frames_per_buffer  # The analysis window size.
+        hop_s = (
+            win_s // 4
+        )  # The step size between analysis windows. Overlap improves stability.
         self._pitch_detector = aubio.pitch(
             "yin",
-            4096,
-            self._frames_per_buffer,
+            win_s,
+            hop_s,
             self._sample_rate,
         )
         self._pitch_detector.set_unit("Hz")
@@ -241,6 +243,7 @@ class NoteDetector:
 
         except Exception as e:
             logger.error(f"Error in _audio_callback: {e}", exc_info=True)
+            raise
 
     def start(self, callback: Callable[[DetectedNote, float], None]) -> bool:
         """Start the note detection audio stream.
@@ -299,7 +302,7 @@ class NoteDetector:
             logger.debug(f"Device info: {self._device_info}", exc_info=True)
             self._running = False
             self._audio_stream = None
-            return False
+            raise e
 
     def stop(self) -> None:
         """Stop the note detector and clean up resources.
@@ -380,89 +383,31 @@ class NoteDetector:
         if not note_name:
             return
 
-        # Add to note history for stability checking
-        self._note_history.append(note_name)
+        # Create a DetectedNote object from the raw pitch detection
+        detected = DetectedNote(
+            note_name=note_name,
+            frequency=pitch,
+            confidence=confidence,
+            signal=signal_level,
+            is_stable=False,  # The analyzer will determine stability
+            timestamp=time.time(),
+        )
 
-        # Check if we have a stable note
-        if len(self._note_history) >= self._min_stable_count:
-            # Count occurrences of each note in history
-            note_counts: Dict[str, int] = {}
-            for note in self._note_history:
-                if note is not None:
-                    note_counts[note] = note_counts.get(note, 0) + 1
+        # Add the new note to the stability analyzer
+        self._stability_analyzer.add_note(detected)
 
-            if note_counts:
-                # Find the most common note and its count
-                most_common_note: str = max(note_counts.items(), key=lambda x: x[1])[0]
-                majority: float = note_counts[most_common_note] / len(
-                    self._note_history
-                )
+        # Get the stable note from the analyzer
+        new_stable_note = self._stability_analyzer.get_stable_note()
 
-                # If we have a clear majority, consider it a stable note
-                if majority >= self._stability_majority:
-                    # Only trigger callback if this is a new note
-                    if most_common_note != self._current_note:
-                        self._current_note = most_common_note
-                        self._stable_count = 0
-
-                        # Create DetectedNote object
-                        # Extract note name and octave from most_common_note (e.g., 'C4' -> 'C', 4)
-                        note_name = "".join(
-                            [c for c in most_common_note if not c.isdigit()]
-                        )
-                        octave = (
-                            int(most_common_note[len(note_name) :])
-                            if any(c.isdigit() for c in most_common_note)
-                            else 4
-                        )
-
-                        detected_note = DetectedNote(
-                            timestamp=time.time(),
-                            note_name=note_name,
-                            octave=octave,
-                            frequency=pitch,
-                            confidence=confidence,
-                            signal=signal_level,
-                            is_stable=True,
-                        )
-
-                        # Call the callback with the detected note
-                        try:
-                            self._callback(detected_note, signal_level)
-                        except Exception as e:
-                            logger.error(
-                                f"Error in note detection callback: {e}", exc_info=True
-                            )
-
-                    # Reset stability counter if we have a stable note
-                    self._stable_count = 0
-                else:
-                    # Increment stability counter if we don't have a stable note yet
-                    self._stable_count += 1
-
-            # If we've had too many unstable readings, clear the current note
-            if self._stable_count > self._min_stable_count * 2:
-                if self._current_note is not None:
-                    self._current_note = None
-                    self._stable_count = 0
-                    # Optionally notify that the note was cleared
-                    try:
-                        self._callback(
-                            DetectedNote(
-                                timestamp=time.time(),
-                                note_name="",
-                                octave=4,
-                                frequency=0.0,
-                                confidence=0.0,
-                                signal=0.0,
-                                is_stable=False,
-                            ),
-                            0.0,
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Error in note cleared callback: {e}", exc_info=True
-                        )
+        # Only trigger the callback if the stable note has changed
+        if new_stable_note != self._current_stable_note:
+            self._current_stable_note = new_stable_note
+            try:
+                # The callback receives the new stable note (or None) and the signal strength
+                self._callback(new_stable_note, signal_level)
+            except Exception as e:
+                logger.error(f"Error in note detection callback: {e}", exc_info=True)
+                raise e
 
     def _frequency_to_note(self, frequency: float, use_flats: bool = False) -> str:
         """Convert a frequency in Hz to the nearest note name.
@@ -511,7 +456,7 @@ class NoteDetector:
             logger.error(
                 f"Error converting frequency {frequency} to note: {e}", exc_info=True
             )
-            return ""
+            raise e
 
     def convert_note_notation(self, note_name: str, to_flats: bool = False) -> str:
         return convert_note_notation(self, note_name, to_flats)
@@ -722,18 +667,7 @@ class NoteDetector:
 
         except Exception as e:
             logger.error(f"Error initializing audio device: {e}")
-            # Try falling back to default settings if initialization fails
-            try:
-                logger.warning("Falling back to default audio settings...")
-                self._audio_stream = sd.Stream(
-                    samplerate=self._sample_rate,
-                    channels=self._channels,
-                    dtype=np.float32,
-                )
-                logger.info("Successfully initialized with fallback audio settings")
-            except Exception as fallback_error:
-                logger.error(f"Fallback audio initialization failed: {fallback_error}")
-                raise
+            raise e
 
     def _audio_callback(
         self, indata: np.ndarray, frames: int, stream_time: dict, status: Any
@@ -863,12 +797,12 @@ class NoteDetector:
 
                 # If signal is weak (below 0.05), maintain the current stable note
                 # This prevents jumping between notes during decay
-                if signal_max < 0.05 and self._stable_note:
+                if signal_max < 0.05 and self._current_stable_note:
                     logger.debug(
                         f"Signal weak ({signal_max:.4f} < 0.05), "
-                        f"maintaining current note: {self._stable_note.note_name}"
+                        f"maintaining current note: {self._current_stable_note.note_name}"
                     )
-                    detected_freq = self._stable_note.frequency
+                    detected_freq = self._current_stable_note.frequency
 
                 # Filter out unreasonable frequencies
                 if (
@@ -935,6 +869,7 @@ class NoteDetector:
                 )
         except Exception as e:
             logger.error(f"Error in audio_callback: {e}", exc_info=True)
+            raise e
 
     def get_current_note(self) -> Optional[DetectedNote]:
         """Get the current detected note

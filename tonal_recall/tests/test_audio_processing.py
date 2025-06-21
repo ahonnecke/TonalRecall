@@ -41,6 +41,7 @@ def get_test_cases():
                 marks = []
                 if "E1_short.wav" in wav_path:
                     marks.append(pytest.mark.xfail(reason="E1 tests are known to be unstable with short samples."))
+                # Removed xfail mark for D2 test case
                 
                 test_cases.append(pytest.param(wav_path, expected_note, marks=marks))
 
@@ -56,7 +57,7 @@ def test_all_recorded_notes_with_service(wav_file_path, expected_note_with_octav
     """
     detected_notes = []
     note_found = False
-    buffer_size = 1024
+    buffer_size = 8192  # Increased buffer for better low-frequency resolution
 
     def on_note_detected(note: DetectedNote | None):
         nonlocal note_found
@@ -99,8 +100,7 @@ def test_all_recorded_notes_with_service(wav_file_path, expected_note_with_octav
     assert len(detected_notes) > 0, f"No note detected for {os.path.basename(wav_file_path)}"
 
     detected_note_name = detected_notes[0].note_name
-    expected_note_letter = "".join(c for c in expected_note_with_octave if not c.isdigit())
 
     assert (
-        detected_note_name == expected_note_letter
-    ), f"Expected {expected_note_letter} but got {detected_note_name} for {os.path.basename(wav_file_path)}"
+        detected_note_name == expected_note_with_octave
+    ), f"Expected {expected_note_with_octave} but got {detected_note_name} for {os.path.basename(wav_file_path)}"

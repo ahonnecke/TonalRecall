@@ -70,19 +70,13 @@ def main():
     try:
         game, ui = setup_game_and_ui(args)
 
-        # Set up note detection callback
-        def on_note_detected(note, signal_strength):
-            if game.running and game.current_target:
-                game.note_detected_callback(note, signal_strength)
-                ui.update_display(game)
-
         # Run the game
         game_duration = args.duration  # Use duration from command line
         if hasattr(game, "test_mode") and game.test_mode:
             game_duration = game.test_duration
 
         game.start_game(duration=game_duration)
-        ui.run_game_loop(game, game_duration, on_note_detected)
+        ui.run_game_loop(game, game_duration)
 
         # Show final stats
         played_duration = game_duration - game.time_remaining

@@ -1,5 +1,6 @@
 import time
 import random
+import queue
 from typing import Optional
 from .note_detector import NoteDetector
 from .note_matcher import NoteMatcher
@@ -45,6 +46,7 @@ class NoteGame:
         self.game_start_time = 0  # Track when the game started
         self.time_remaining = 0
         self.ui = None
+        self.event_queue = queue.Queue()
         self.stats = {
             "total_notes": 0,
             "correct_notes": 0,
@@ -91,16 +93,30 @@ class NoteGame:
     def note_detected_callback(
         self, note: DetectedNote, signal_strength: float
     ) -> None:
-        """Callback for when a note is detected
+        """Callback for when a note is detected. Puts stable notes on the event queue."""
+        if not self.running:
+            return
 
-        Args:
-            note: The detected note object with 'name' attribute
-            signal_strength: The strength of the signal (not currently used)
-        """
+        # Only queue stable notes for processing
+        if getattr(note, "is_stable", False):
+            self.event_queue.put(note)
+
+    def process_events(self) -> None:
+        """Process note events from the queue. Should be called from the main game loop."""
+        try:
+            # Process all available notes in the queue without blocking
+            while not self.event_queue.empty():
+                note = self.event_queue.get_nowait()
+                self._handle_stable_note(note)
+        except queue.Empty:
+            # This is expected if the queue is empty, no-op.
+            pass
+
+    def _handle_stable_note(self, note: DetectedNote) -> None:
+        """Handles the game logic for a stable note dequeued by process_events."""
         if not self.running or not self.current_target:
             return
 
-        # Store the entire DetectedNote object
         self.current_note = note
         played_note = note.note_name
 
@@ -110,42 +126,30 @@ class NoteGame:
         else:
             self.stats["notes_played"][played_note] = 1
 
-        # Only check for matches on stable notes
-        is_stable = getattr(note, "is_stable", False)
-        logger.debug("Note detected: %s (stable: %s)", played_note, is_stable)
+        logger.info("STABLE NOTE DETECTED: %s", played_note)
 
-        if is_stable:
-            logger.info("STABLE NOTE DETECTED: %s", played_note)
+        # Use NoteMatcher to check if the played note matches the target
+        target_note = self.current_target
+        match_result = self.note_matcher.match(target_note, played_note)
 
-            # Use NoteMatcher to check if the played note matches the target
-            target_note = str(self.current_target)
-            match_result = self.note_matcher.match(target_note, played_note)
+        logger.debug(
+            "Matching - Target: '%s' vs Played: '%s' -> %s",
+            target_note,
+            played_note,
+            "MATCH" if match_result else "NO MATCH",
+        )
 
-            logger.debug(
-                "Matching - Target: '%s' vs Played: '%s' -> %s",
-                target_note,
+        if match_result:
+            elapsed = time.time() - self.last_note_change_time
+            self.stats["times"].append(elapsed)
+            self.stats["correct_notes"] += 1
+            logger.info(
+                "NOTE MATCHED! '%s' matches target '%s' in %.2f seconds",
                 played_note,
-                "MATCH" if match_result else "NO MATCH",
+                target_note,
+                elapsed,
             )
-
-            if match_result:
-                # Calculate time since the note was first displayed
-                elapsed = time.time() - self.last_note_change_time
-                self.stats["times"].append(elapsed)
-                self.stats["correct_notes"] += 1
-                logger.info(
-                    "NOTE MATCHED! '%s' matches target '%s' in %.2f seconds",
-                    played_note,
-                    target_note,
-                    elapsed,
-                )
-
-                # Get a new target note
-                self.pick_new_target()
-
-                # Trigger UI update
-                if self.ui:
-                    self.ui.update_display(self)
+            self.pick_new_target()
 
     def pick_new_target(self) -> str:
         """Pick a new target note from available notes based on current difficulty"""

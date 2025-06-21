@@ -226,13 +226,12 @@ class PygameUI:
                     waiting = False
             self.clock.tick(30)
 
-    def run_game_loop(self, game, duration_secs, note_callback):
-        """Run the main game loop
+    def run_game_loop(self, game, duration_secs):
+        """Run the main game loop.
 
         Args:
-            game: The game instance
-            duration_secs: Duration of the game in seconds
-            note_callback: Callback function for note detection
+            game: The game instance.
+            duration_secs: Duration of the game in seconds.
         """
         if not self.initialized or not self.screen:
             logger.error("Cannot run game loop: UI not initialized")
@@ -240,29 +239,23 @@ class PygameUI:
 
         logger.info("Starting game loop")
 
-        # Calculate end time
         start_time = time.time()
         end_time = start_time + duration_secs
 
-        # Main game loop
         running = True
         while running and time.time() < end_time and game.running:
-            # Handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
                     game.running = False
                     break
 
+            # Process note events from the queue
+            game.process_events()
+
             # Update game state
             current_time = time.time()
             game.time_remaining = max(0, end_time - current_time)
-
-            # Check for note detection
-            if hasattr(game, "detector") and game.detector:
-                note = game.detector.get_current_note()
-                if note and hasattr(note, "is_stable") and note.is_stable:
-                    note_callback(note, 1.0)  # signal_strength not currently used
 
             # Calculate and display notes per second
             if hasattr(game, "game_start_time") and game.stats["correct_notes"] > 0:
@@ -272,10 +265,7 @@ class PygameUI:
                         game.stats["correct_notes"] / game_duration
                     )
 
-            # Update display
             self.update_display(game)
-
-            # Cap the frame rate
             self.clock.tick(30)
 
         # Game over

@@ -2,11 +2,6 @@
 
 import numpy as np
 import logging
-import time
-from typing import (
-    Optional,
-)
-from .note_types import DetectedNote
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
