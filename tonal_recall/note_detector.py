@@ -17,7 +17,7 @@ from typing import (
     TypeAlias,
 )
 from .audio_device import find_rocksmith_adapter
-from .note_utils import get_note_name, get_stable_note
+from .note_utils import get_note_name, get_stable_note, convert_note_notation
 
 from .note_types import DetectedNote
 
@@ -515,41 +515,7 @@ class NoteDetector:
             return ""
 
     def convert_note_notation(self, note_name: str, to_flats: bool = False) -> str:
-        """Convert a note name between sharp and flat notation.
-
-        Args:
-            note_name: The note name to convert (e.g., 'F#2' or 'Gb2')
-            to_flats: If True, convert to flats (e.g., 'Gb2'), otherwise to sharps (e.g., 'F#2')
-
-        Returns:
-            str: The converted note name, or original if no conversion needed or invalid
-
-        Examples:
-            >>> convert_note_notation('F#2', to_flats=True)  # Returns 'Gb2'
-            >>> convert_note_notation('Gb2', to_flats=False)  # Returns 'F#2'
-        """
-        if not note_name or not isinstance(note_name, str):
-            return note_name or ""
-
-        try:
-            # Extract note letter and octave
-            note_part = "".join(
-                c for c in note_name if not c.isdigit() and c != "-"
-            ).strip()
-            octave_part = note_name[len(note_part) :] if note_name else ""
-
-            # Check if conversion is needed
-            if to_flats and note_part in self.SHARP_TO_FLAT:
-                return f"{self.SHARP_TO_FLAT[note_part]}{octave_part}"
-            elif not to_flats and note_part in self.FLAT_TO_SHARP:
-                return f"{self.FLAT_TO_SHARP[note_part]}{octave_part}"
-
-            # No conversion needed or possible
-            return note_name
-
-        except Exception as e:
-            logger.error(f"Error converting note {note_name}: {e}", exc_info=True)
-            return note_name
+        return convert_note_notation(self, note_name, to_flats)
 
     @property
     def silence_threshold_db(self) -> float:
