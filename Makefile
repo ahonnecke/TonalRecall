@@ -18,3 +18,9 @@ test.pdb:
 
 test.realnotes.logs:
 	PYTHONPATH=./ pytest -v -o log_cli=true -o log_cli_level=DEBUG tonal_recall/tests/test_audio_processing.py
+
+device.list:
+	lsusb
+
+device.rocksmith:
+	lsusb | grep Rocksmith
