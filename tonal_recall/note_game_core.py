@@ -3,7 +3,7 @@ import random
 import queue
 from typing import Optional
 from .note_detector import NoteDetector
-from .note_matcher import NoteMatcher
+from .note_matcher import NOTE_PATTERN, NoteMatcher
 from .logger import get_logger
 from .note_types import DetectedNote
 
@@ -114,28 +114,34 @@ class NoteGame:
 
     def _handle_stable_note(self, note: DetectedNote) -> None:
         """Handles the game logic for a stable note dequeued by process_events."""
-        if not self.running or not self.current_target:
+        if not self.running:
             return
 
-        self.current_note = note
-        played_note = note.note_name
+        played_note_full = note.note_name
 
-        # Track note in stats
-        if played_note in self.stats["notes_played"]:
-            self.stats["notes_played"][played_note] += 1
-        else:
-            self.stats["notes_played"][played_note] = 1
+        # Parse the note name to get the note class (e.g., 'G#' from 'G#4')
+        note_match = NOTE_PATTERN.match(played_note_full)
+        if not note_match:
+            logger.warning(f"Could not parse played note: {played_note_full}")
+            return
 
-        logger.info("STABLE NOTE DETECTED: %s", played_note)
+        played_note_class = note_match.group(1).upper()
+
+        # Update stats for notes played, keyed by the note class
+        self.stats["notes_played"][played_note_class] = (
+            self.stats["notes_played"].get(played_note_class, 0) + 1
+        )
+
+        logger.info("STABLE NOTE DETECTED: %s", played_note_full)
 
         # Use NoteMatcher to check if the played note matches the target
         target_note = self.current_target
-        match_result = self.note_matcher.match(target_note, played_note)
+        match_result = self.note_matcher.match(target_note, played_note_full)
 
         logger.debug(
             "Matching - Target: '%s' vs Played: '%s' -> %s",
             target_note,
-            played_note,
+            played_note_full,
             "MATCH" if match_result else "NO MATCH",
         )
 
@@ -145,7 +151,7 @@ class NoteGame:
             self.stats["correct_notes"] += 1
             logger.info(
                 "NOTE MATCHED! '%s' matches target '%s' in %.2f seconds",
-                played_note,
+                played_note_full,
                 target_note,
                 elapsed,
             )

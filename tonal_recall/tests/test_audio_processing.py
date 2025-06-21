@@ -16,21 +16,19 @@ RECORDINGS_PATH = os.path.abspath(
 
 def get_test_cases():
     """
-    Generates test cases by finding all _short.wav files and their corresponding
+    Generates test cases by finding all _test.wav files and their corresponding
     .json metadata files in the recordings directory.
     """
     test_cases = []
     json_files = {
-        os.path.splitext(f)[0]
-        .replace("_short", ""):
-        os.path.join(RECORDINGS_PATH, f)
+        os.path.splitext(f)[0].replace("_test", ""): os.path.join(RECORDINGS_PATH, f)
         for f in os.listdir(RECORDINGS_PATH)
         if f.endswith(".json")
     }
 
     for wav_file in os.listdir(RECORDINGS_PATH):
-        if wav_file.endswith("_short.wav"):
-            base_name = os.path.splitext(wav_file)[0].replace("_short", "")
+        if wav_file.endswith("_test.wav"):
+            base_name = os.path.splitext(wav_file)[0].replace("_test", "")
             if base_name in json_files:
                 json_path = json_files[base_name]
                 with open(json_path, "r") as f:
@@ -39,10 +37,14 @@ def get_test_cases():
                 wav_path = os.path.join(RECORDINGS_PATH, wav_file)
                 # Mark known unstable tests
                 marks = []
-                if "E1_short.wav" in wav_path:
-                    marks.append(pytest.mark.xfail(reason="E1 tests are known to be unstable with short samples."))
+                if "E1_test.wav" in wav_path:
+                    marks.append(
+                        pytest.mark.xfail(
+                            reason="E1 tests are known to be unstable with short samples."
+                        )
+                    )
                 # Removed xfail mark for D2 test case
-                
+
                 test_cases.append(pytest.param(wav_path, expected_note, marks=marks))
 
     # Sort test cases by note name for consistent test order
@@ -72,7 +74,7 @@ def test_all_recorded_notes_with_service(wav_file_path, expected_note_with_octav
             file_path=wav_file_path,
             chunk_size=buffer_size,
             gain=4.0,  # Gain applied in the original test
-            loop=False
+            loop=False,
         )
 
         service = NoteDetectionService(
@@ -97,7 +99,9 @@ def test_all_recorded_notes_with_service(wav_file_path, expected_note_with_octav
         if service:
             service.stop()
 
-    assert len(detected_notes) > 0, f"No note detected for {os.path.basename(wav_file_path)}"
+    assert (
+        len(detected_notes) > 0
+    ), f"No note detected for {os.path.basename(wav_file_path)}"
 
     detected_note_name = detected_notes[0].note_name
 
