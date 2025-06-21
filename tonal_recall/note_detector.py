@@ -178,6 +178,8 @@ class NoteDetector:
             history_size=self.STABILITY_WINDOW,
         )
         self._current_stable_note: Optional[DetectedNote] = None
+        self._note_just_released: bool = False
+        self._last_signal_max: float = 0.0
         self._running: bool = False  # Tracks if the audio stream is running
         self._callback: Optional[Callable[[DetectedNote, float], None]] = None
         self._buffer_size: int = self._frames_per_buffer
@@ -215,35 +217,7 @@ class NoteDetector:
             f"min_confidence={self._min_confidence}, min_signal={self._min_signal}"
         )
 
-    def _audio_callback(
-        self, indata: np.ndarray, frames: int, time_info: dict, status: sd.CallbackFlags
-    ) -> None:
-        """Callback for processing audio data from the input stream.
 
-        Args:
-            indata: The input audio data as a numpy array (frames x channels)
-            frames: Number of frames in the buffer
-            time_info: Dictionary containing timing information from PortAudio
-            status: Callback status flags from PortAudio
-
-        Note:
-            This callback runs in a separate audio thread. Keep processing minimal
-            and avoid any blocking operations to prevent audio glitches.
-        """
-        try:
-            if status:
-                logger.warning(f"Audio status: {status}")
-
-            if not self._running:
-                return
-
-            # Convert input to float32 and process only the first channel
-            audio_data = indata[:, 0].astype(np.float32)
-            self._process_audio(audio_data)
-
-        except Exception as e:
-            logger.error(f"Error in _audio_callback: {e}", exc_info=True)
-            raise
 
     def start(self, callback: Callable[[DetectedNote, float], None]) -> bool:
         """Start the note detection audio stream.
@@ -387,7 +361,7 @@ class NoteDetector:
             note_name=note_name,
             frequency=pitch,
             confidence=confidence,
-            signal=signal_level,
+            signal_max=signal_level,
             is_stable=False,  # The analyzer will determine stability
             timestamp=time.time(),
         )
@@ -712,56 +686,11 @@ class NoteDetector:
                 pitch = raw_pitch[0]  # The frequency in Hz
                 confidence = self._pitch_detector.get_confidence()
 
-                # Apply a window function to reduce spectral leakage
-                window = np.hanning(len(audio_data))
-                windowed_data = audio_data * window
+                dom_freq, bass_freqs, bass_magnitude = self._analyze_fft(audio_data)
 
-                # Calculate FFT with zero-padding for better frequency resolution
-                n_fft = 4 * len(
-                    audio_data
-                )  # Zero-padding for better frequency resolution
-                fft = np.fft.rfft(windowed_data, n=n_fft)
-                fft_freqs = np.fft.rfftfreq(n_fft, 1.0 / self._sample_rate)
-
-                # Get the magnitude spectrum
-                magnitude = np.abs(fft)
-
-                # Filter to focus on bass/guitar frequency range (30-500 Hz)
-                bass_range = (fft_freqs >= 30) & (fft_freqs <= 500)
-                bass_freqs = fft_freqs[bass_range]
-                bass_magnitude = magnitude[bass_range]
-
-                # Find the dominant frequency in the bass range
-                if len(bass_magnitude) > 0:
-                    # Find the strongest peak in the bass range
-                    max_idx = np.argmax(bass_magnitude)
-                    dom_freq = bass_freqs[max_idx]
-
-                    # Find the closest note in the standard notes list
-                    # Calculate frequency for each note in the chromatic scale (A4 = 440Hz)
-                    def get_note_freq(note_idx, octave=4):
-                        # A4 is the 9th note in STANDARD_NOTES (0-based index 9)
-                        semitones_from_a4 = (note_idx - 9) + (octave - 4) * 12
-                        return 440.0 * (2.0 ** (semitones_from_a4 / 12.0))
-
-                    # Find the note with frequency closest to dom_freq
-                    closest_note = min(
-                        NoteDetector.STANDARD_NOTES,
-                        key=lambda note: abs(
-                            get_note_freq(NoteDetector.STANDARD_NOTES.index(note))
-                            - dom_freq
-                        ),
-                    )
-                    note_name = closest_note
-                    note_freq = get_note_freq(
-                        NoteDetector.STANDARD_NOTES.index(note_name)
-                    )
-
-                    # If we're within 5% of a standard note, snap to that frequency
-                    if abs(dom_freq - note_freq) / note_freq < 0.05:
-                        dom_freq = note_freq
-                else:
-                    dom_freq = 0
+                detected_freq = self._select_and_correct_pitch(
+                    pitch, confidence, dom_freq, bass_freqs, bass_magnitude, signal_max
+                )
 
                 current_time = time.strftime("%H:%M:%S")
                 if pitch > 0:
@@ -776,134 +705,9 @@ class NoteDetector:
                         f"{current_time} | Aubio: {pitch:.1f} Hz | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}"
                     )
 
-                # Pitch selection logic: Use aubio pitch if confidence is high and pitch is valid, otherwise use FFT
-                CONFIDENCE_THRESHOLD = 0.7  # Can be tuned or made configurable
-                detected_method = None
-                if confidence >= CONFIDENCE_THRESHOLD and 30 < pitch < 1000:
-                    detected_freq = pitch
-                    detected_method = "aubio"
-                elif 30 < dom_freq < 1000:
-                    detected_freq = dom_freq
-                    detected_method = "fft"
-                else:
-                    detected_freq = 0
-                    detected_method = "none"
-
-                logger.debug(
-                    f"Pitch selection - method: {detected_method}, confidence: {confidence:.2f}, "
-                    f"aubio: {pitch:.1f}Hz, fft: {dom_freq:.1f}Hz"
+                self._update_note_stability(
+                    detected_freq, confidence, signal_max, current_time
                 )
-
-                # Octave error correction for low notes
-                # If the detected frequency is in a range where it might be a harmonic (e.g., 80-150 Hz for bass)
-                # check for energy at the sub-harmonic frequency (half the detected frequency).
-                if 70 < detected_freq < 150:
-                    sub_harmonic_freq = detected_freq / 2.0
-
-                    # Define a small window around the sub-harmonic to check for energy
-                    tolerance_hz = 2.0
-                    sub_harmonic_min = sub_harmonic_freq - tolerance_hz
-                    sub_harmonic_max = sub_harmonic_freq + tolerance_hz
-
-                    # Find the energy in the sub-harmonic range within the FFT spectrum
-                    sub_harmonic_indices = np.where(
-                        (bass_freqs >= sub_harmonic_min)
-                        & (bass_freqs <= sub_harmonic_max)
-                    )
-                    if len(sub_harmonic_indices[0]) > 0:
-                        sub_harmonic_energy = np.sum(
-                            bass_magnitude[sub_harmonic_indices]
-                        )
-
-                        # Find the energy of the originally detected peak
-                        peak_indices = np.where(
-                            (bass_freqs >= detected_freq - tolerance_hz)
-                            & (bass_freqs <= detected_freq + tolerance_hz)
-                        )
-                        peak_energy = (
-                            np.sum(bass_magnitude[peak_indices])
-                            if len(peak_indices[0]) > 0
-                            else 0
-                        )
-
-                        # If the sub-harmonic energy is significant (e.g., > 30% of the peak's energy), it's likely an octave error.
-                        if peak_energy > 0 and sub_harmonic_energy > (
-                            peak_energy * 0.3
-                        ):
-                            logger.debug(
-                                f"Octave error detected. Original: {detected_freq:.1f}Hz. "
-                                f"Found significant sub-harmonic energy ({sub_harmonic_energy:.2f}) "
-                                f"at ~{sub_harmonic_freq:.1f}Hz compared to peak energy ({peak_energy:.2f}). "
-                                f"Correcting pitch."
-                            )
-                            detected_freq = sub_harmonic_freq
-
-                # If signal is weak (below 0.05), maintain the current stable note
-                # This prevents jumping between notes during decay
-                if signal_max < 0.05 and self._current_stable_note:
-                    logger.debug(
-                        f"Signal weak ({signal_max:.4f} < 0.05), "
-                        f"maintaining current note: {self._current_stable_note.note_name}"
-                    )
-                    detected_freq = self._current_stable_note.frequency
-
-                # Filter out unreasonable frequencies
-                if (
-                    detected_freq > 0 and 30 < detected_freq < 1000
-                ):  # Reasonable range for guitar/bass
-                    # Convert frequency to note name
-                    note_name = get_note_name(detected_freq)
-                    detected = DetectedNote(
-                        note_name,
-                        detected_freq,
-                        confidence,
-                        signal_max,
-                        False,
-                        time.time(),
-                    )
-                    self._stability_analyzer.add_note(detected)
-
-                    # Track previous stable note for change detection
-                    prev_stable_note = self._current_stable_note
-
-                    # Get stable note
-                    new_stable_note = self._stability_analyzer.get_stable_note()
-                    self._stable_note = new_stable_note
-                    self._current_stable_note = new_stable_note
-
-                    if new_stable_note:
-                        if self._callback:
-                            self._callback(new_stable_note, signal_max)
-
-                    # Log stable note changes
-                    stable_note_changed = (
-                        (prev_stable_note is None and new_stable_note is not None)
-                        or (prev_stable_note is not None and new_stable_note is None)
-                        or (
-                            prev_stable_note
-                            and new_stable_note
-                            and (
-                                prev_stable_note.note_name != new_stable_note.note_name
-                                or abs(
-                                    prev_stable_note.confidence
-                                    - new_stable_note.confidence
-                                )
-                                > 0.1
-                            )
-                        )
-                    )
-
-                    if stable_note_changed and prev_stable_note:
-                        logger.info(f"Note released: {prev_stable_note.note_name}")
-                    elif not new_stable_note and not prev_stable_note and detected:
-                        # Only log current note if we don't have a stable note and it's not just silence
-                        self._current_note = detected
-                        logger.debug(
-                            f"{current_time} | Detected: {self._current_note.note_name} | "
-                            f"{self._current_note.frequency:.1f} Hz | "
-                            f"Conf: {self._current_note.confidence:.2f} | "
-                            f"Signal: {signal_max:.4f}"
-                        )
 
             else:
                 current_time = time.strftime("%H:%M:%S")
@@ -913,6 +717,173 @@ class NoteDetector:
         except Exception as e:
             logger.error(f"Error in audio_callback: {e}", exc_info=True)
             raise e
+
+    def _analyze_fft(self, audio_data: np.ndarray) -> float:
+        """Analyze the audio data with FFT to find the dominant frequency."""
+        # Apply a window function to reduce spectral leakage
+        window = np.hanning(len(audio_data))
+        windowed_data = audio_data * window
+
+        # Calculate FFT with zero-padding for better frequency resolution
+        n_fft = 4 * len(audio_data)
+        fft = np.fft.rfft(windowed_data, n=n_fft)
+        fft_freqs = np.fft.rfftfreq(n_fft, 1.0 / self._sample_rate)
+
+        # Get the magnitude spectrum
+        magnitude = np.abs(fft)
+
+        # Filter to focus on bass/guitar frequency range (30-500 Hz)
+        bass_range = (fft_freqs >= 30) & (fft_freqs <= 500)
+        bass_freqs = fft_freqs[bass_range]
+        bass_magnitude = magnitude[bass_range]
+
+        # Find the dominant frequency in the bass range
+        if len(bass_magnitude) > 0:
+            max_idx = np.argmax(bass_magnitude)
+            dom_freq = bass_freqs[max_idx]
+
+            # Snap to the closest standard note frequency if within a tolerance
+            def get_note_freq(note_idx, octave=4):
+                semitones_from_a4 = (note_idx - 9) + (octave - 4) * 12
+                return 440.0 * (2.0 ** (semitones_from_a4 / 12.0))
+
+            closest_note = min(
+                NoteDetector.STANDARD_NOTES,
+                key=lambda note: abs(
+                    get_note_freq(NoteDetector.STANDARD_NOTES.index(note)) - dom_freq
+                ),
+            )
+            note_freq = get_note_freq(NoteDetector.STANDARD_NOTES.index(closest_note))
+
+            if abs(dom_freq - note_freq) / note_freq < 0.05:
+                dom_freq = note_freq
+
+            return dom_freq, bass_freqs, bass_magnitude
+        return 0, np.array([]), np.array([])
+
+    def _select_and_correct_pitch(
+        self,
+        aubio_pitch: float,
+        aubio_confidence: float,
+        fft_freq: float,
+        bass_freqs: np.ndarray,
+        bass_magnitude: np.ndarray,
+        signal_max: float,
+    ) -> float:
+        """Select the best pitch, apply octave correction and weak signal handling."""
+        CONFIDENCE_THRESHOLD = 0.7
+        detected_freq = 0
+
+        if aubio_confidence >= CONFIDENCE_THRESHOLD and 30 < aubio_pitch < 1000:
+            detected_freq = aubio_pitch
+        elif 30 < fft_freq < 1000:
+            detected_freq = fft_freq
+
+        # Octave error correction for low notes
+        if 70 < detected_freq < 150 and len(bass_freqs) > 0:
+            sub_harmonic_freq = detected_freq / 2.0
+            tolerance_hz = 2.0
+            sub_harmonic_min = sub_harmonic_freq - tolerance_hz
+            sub_harmonic_max = sub_harmonic_freq + tolerance_hz
+
+            sub_harmonic_indices = np.where(
+                (bass_freqs >= sub_harmonic_min) & (bass_freqs <= sub_harmonic_max)
+            )
+            if len(sub_harmonic_indices[0]) > 0:
+                sub_harmonic_energy = np.sum(bass_magnitude[sub_harmonic_indices])
+
+                peak_indices = np.where(
+                    (bass_freqs >= detected_freq - tolerance_hz)
+                    & (bass_freqs <= detected_freq + tolerance_hz)
+                )
+                peak_energy = (
+                    np.sum(bass_magnitude[peak_indices])
+                    if len(peak_indices[0]) > 0
+                    else 0
+                )
+
+                if peak_energy > 0 and sub_harmonic_energy > (peak_energy * 0.3):
+                    logger.debug(
+                        f"Octave error detected. Original: {detected_freq:.1f}Hz. "
+                        f"Correcting to {sub_harmonic_freq:.1f}Hz."
+                    )
+                    detected_freq = sub_harmonic_freq
+
+        # If signal is weak, maintain the current stable note to prevent jumping
+        if signal_max < 0.05 and self._current_stable_note:
+            logger.debug(
+                f"Signal weak ({signal_max:.4f} < 0.05), "
+                f"maintaining current note: {self._current_stable_note.note_name}"
+            )
+            return self._current_stable_note.frequency
+
+        return detected_freq
+
+    def _update_note_stability(
+        self, detected_freq: float, confidence: float, signal_max: float, current_time: str
+    ) -> None:
+        """Update note stability based on the detected frequency and trigger callbacks."""
+        detected = None
+        if detected_freq > 0 and 30 < detected_freq < 1000:
+            detected = DetectedNote(
+                get_note_name(detected_freq),
+                detected_freq,
+                confidence,
+                signal_max,
+                False,
+                time.time(),
+            )
+            self._stability_analyzer.add_note(detected)
+
+        prev_stable_note = self._current_stable_note
+        new_stable_note = self._stability_analyzer.get_stable_note()
+        self._current_stable_note = new_stable_note
+        stable_note_changed = prev_stable_note != new_stable_note
+
+        if stable_note_changed and prev_stable_note:
+            logger.info(f"Note released: {prev_stable_note.note_name}")
+            self._note_just_released = True
+
+        # --- UI Note State Machine ---
+        if new_stable_note:
+            # 1. STABLE STATE: A stable note is active, so display it.
+            self._current_note = new_stable_note
+            self._note_just_released = False
+        elif self._note_just_released:
+            # 2. COOLDOWN STATE: A note was just released. Keep the display clear
+            #    until the signal decays below a threshold.
+            DECAY_THRESHOLD = 0.05
+            if signal_max < DECAY_THRESHOLD:
+                self._note_just_released = False
+                self._current_note = None
+            else:
+                self._current_note = None
+        else:
+            # 3. LISTENING STATE: No stable note, not in cooldown. Only show a
+            #    newly detected note if it's a genuine attack.
+            is_attack = (
+                signal_max > self._last_signal_max * 1.8 and signal_max > 0.1
+            )
+            if is_attack:
+                self._current_note = detected
+            else:
+                self._current_note = None
+
+        # Update last signal max for next frame's attack detection.
+        self._last_signal_max = signal_max
+
+        # Trigger callback for game logic
+        if new_stable_note and self._callback:
+            self._callback(new_stable_note, signal_max)
+
+        # Logging
+        if not new_stable_note and self._current_note:
+            logger.debug(
+                f"{current_time} | Detected: {self._current_note.note_name} | "
+                f"{self._current_note.frequency:.1f} Hz | "
+                f"Conf: {self._current_note.confidence:.2f} | "
+                f"Signal: {self._current_note.signal_max:.4f}"
+            )
 
     def get_current_note(self) -> Optional[DetectedNote]:
         """Get the current detected note

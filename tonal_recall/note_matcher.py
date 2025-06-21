@@ -34,7 +34,7 @@ class NoteMatcher:
         return note
 
     @classmethod
-    def match(cls, target: str, played: str) -> bool:
+    def match(cls, target: str, played: str, match_octave: bool = False) -> bool:
         """
         Check if the played note matches the target note, ignoring octave.
 
@@ -168,59 +168,58 @@ class NoteMatcher:
             # Log the enharmonic map for debugging
             logger.debug(f"♭♯ ENHARMONIC MAP: {enharmonic_map}")
 
+            note_name_matches = False
             # Check for direct match
-            direct_match = target_note == played_note
-            if direct_match:
+            if target_note == played_note:
                 logger.info(f"✅ DIRECT MATCH: '{target_note}' == '{played_note}'")
+                note_name_matches = True
+            else:
+                # Check for enharmonic equivalents
+                target_in_map = target_note in enharmonic_map
+                played_in_map = played_note in enharmonic_map
+
+                if target_in_map and enharmonic_map[target_note] == played_note:
+                    logger.info(
+                        f"✅ ENHARMONIC MATCH: '{target_note}' matches '{played_note}' "
+                        f"via '{enharmonic_map[target_note]}'"
+                    )
+                    note_name_matches = True
+                elif played_in_map and enharmonic_map[played_note] == target_note:
+                    logger.info(
+                        f"✅ ENHARMONIC MATCH: '{played_note}' matches '{target_note}' "
+                        f"via '{enharmonic_map[played_note]}'"
+                    )
+                    note_name_matches = True
+
+            if not note_name_matches:
+                logger.debug(
+                    f"❌ NO NOTE NAME MATCH FOUND for Target: '{target_note}' and Played: '{played_note}'"
+                )
+                return False
+
+            # If we've reached here, the note names match.
+            # Now, check for octave if required.
+            if not match_octave:
+                logger.debug("Note names match and octave check not required. SUCCESS.")
+                return True
+
+            # Octave matching is required.
+            if not target_octave:
+                logger.warning(
+                    f"Octave match required, but target '{target}' has no octave specified. NO MATCH."
+                )
+                return False
+
+            if target_octave == played_octave:
+                logger.info(
+                    f"✅ OCTAVE MATCH: Target Octave '{target_octave}' == Played Octave '{played_octave}'. SUCCESS."
+                )
                 return True
             else:
-                logger.debug(f"🔍 No direct match: '{played_note}' != '{target_note}'")
-
-            # Check for enharmonic equivalents
-            target_in_map = target_note in enharmonic_map
-            played_in_map = played_note in enharmonic_map
-
-            logger.debug(
-                f"🔍 ENHARMONIC CHECK"
-                f"\n  • Target '{target_note}' in map: {target_in_map}"
-                f"\n  • Played '{played_note}' in map: {played_in_map}"
-            )
-
-            # Case 1: Target note has an enharmonic equivalent that matches played note
-            if target_in_map and enharmonic_map[target_note] == played_note:
-                logger.info(
-                    f"✅ ENHARMONIC MATCH: '{target_note}' matches '{played_note}' "
-                    f"via '{enharmonic_map[target_note]}'"
-                )
-                return True
-
-            # Case 2: Played note has an enharmonic equivalent that matches target note
-            if played_in_map and enharmonic_map[played_note] == target_note:
-                logger.info(
-                    f"✅ ENHARMONIC MATCH: '{played_note}' matches '{target_note}' "
-                    f"via '{enharmonic_map[played_note]}'"
-                )
-                return True
-
-            # If we get here, no match was found
-            logger.debug(
-                f"❌ NO MATCH FOUND"
-                f"\n  • Target: '{target_note}' (from '{target}')"
-                f"\n  • Played: '{played_note}' (from '{played}')"
-                f"\n  • Enharmonic check failed - No equivalent found in map"
-            )
-
-            # Log all possible enharmonic matches for debugging
-            if target_in_map:
                 logger.debug(
-                    f"  • Target '{target_note}' maps to: '{enharmonic_map[target_note]}'"
+                    f"❌ OCTAVE MISMATCH: Target Octave '{target_octave}' != Played Octave '{played_octave}'. NO MATCH."
                 )
-            if played_in_map:
-                logger.debug(
-                    f"  • Played '{played_note}' maps to: '{enharmonic_map[played_note]}'"
-                )
-
-            return False
+                return False
 
         except Exception as e:
             logger.error(

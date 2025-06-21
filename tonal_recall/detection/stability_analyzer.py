@@ -48,7 +48,7 @@ class StabilityAnalyzer:
             for n in self._note_history
             if n.frequency >= self._min_frequency
             and getattr(n, "confidence", 1.0) >= self._min_confidence
-            and getattr(n, "signal", 1.0) >= self._min_signal
+            and getattr(n, "signal_max", 1.0) >= self._min_signal
         ]
 
         if len(valid_notes) < self._min_stable_count:
@@ -76,14 +76,14 @@ class StabilityAnalyzer:
 
         avg_freq = sum(n.frequency for n in largest_group) / len(largest_group)
         avg_confidence = sum(n.confidence for n in largest_group) / len(largest_group)
-        avg_signal = sum(n.signal for n in largest_group) / len(largest_group)
+        avg_signal = sum(n.signal_max for n in largest_group) / len(largest_group)
         most_recent = max(largest_group, key=lambda n: n.timestamp)
 
         new_note = DetectedNote(
             note_name=get_note_name(avg_freq),
             frequency=avg_freq,
             confidence=avg_confidence,
-            signal=avg_signal,
+            signal_max=avg_signal,
             is_stable=True,
             timestamp=most_recent.timestamp,
         )
@@ -91,7 +91,7 @@ class StabilityAnalyzer:
         if self._stable_note and new_note.note_name == self._stable_note.note_name:
             self._stable_note.frequency = new_note.frequency
             self._stable_note.confidence = new_note.confidence
-            self._stable_note.signal = new_note.signal
+            self._stable_note.signal_max = new_note.signal_max
             self._stable_note.timestamp = new_note.timestamp
             return self._stable_note
         else:

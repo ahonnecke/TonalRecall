@@ -78,7 +78,26 @@ class NoteGame:
                 "F#",
                 "G",
                 "G#",
-            ],  # Half notes (chromatic)
+            ],
+            4: [
+                "E1",
+                "F1",
+                "F#1",
+                "G1",
+                "G#1",
+                "A2",
+                "A#2",
+                "B2",
+                "C2",
+                "C#2",
+                "D2",
+                "D#2",
+                "E2",
+                "F2",
+                "F#2",
+                "G2",
+                "G#2",
+            ],
         }
 
         # Set available notes based on difficulty
@@ -136,7 +155,9 @@ class NoteGame:
 
         # Use NoteMatcher to check if the played note matches the target
         target_note = self.current_target
-        match_result = self.note_matcher.match(target_note, played_note_full)
+        match_result = self.note_matcher.match(
+            target_note, played_note_full, match_octave=self.difficulty == 4
+        )
 
         logger.debug(
             "Matching - Target: '%s' vs Played: '%s' -> %s",
@@ -194,7 +215,7 @@ class NoteGame:
         """Update the game display"""
         # Only safe to call from main thread! (CursesUI: always, PygameUI: only from main loop)
         if self.ui:
-            self.ui.update_display(self)
+            self.ui.update_display(self, show_octave=(self.difficulty == 4))
 
     def start_game(self, duration=60):
         """Start the game with the specified duration in seconds"""

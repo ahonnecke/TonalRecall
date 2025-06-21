@@ -52,7 +52,7 @@ class PygameUI:
             self.cleanup()
             raise
 
-    def update_display(self, game):
+    def update_display(self, game, show_octave: bool = False):
         """Update the game display
 
         Args:
@@ -267,7 +267,11 @@ class PygameUI:
                         game.stats["correct_notes"] / game_duration
                     )
 
-            self.update_display(game)
+            # Update the current note for display
+            if hasattr(game, "detector"):
+                game.current_note = game.detector.get_current_note()
+
+            self.update_display(game, show_octave=(game.difficulty == 4))
             self.clock.tick(30)
 
         # Game over

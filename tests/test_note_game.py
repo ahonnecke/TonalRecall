@@ -20,7 +20,7 @@ class TestNoteGame(unittest.TestCase):
             note_name="G#4",
             frequency=415.3,
             confidence=0.9,
-            signal=0.5,
+            signal_max=0.5,
             is_stable=True,
             timestamp=0,
         )
@@ -37,7 +37,7 @@ class TestNoteGame(unittest.TestCase):
             note_name="A4",
             frequency=440.0,
             confidence=0.9,
-            signal=0.5,
+            signal_max=0.5,
             is_stable=True,
             timestamp=0,
         )
@@ -54,7 +54,7 @@ class TestNoteGame(unittest.TestCase):
             note_name="A#4",
             frequency=466.16,
             confidence=0.9,
-            signal=0.5,
+            signal_max=0.5,
             is_stable=True,
             timestamp=0,
         )
