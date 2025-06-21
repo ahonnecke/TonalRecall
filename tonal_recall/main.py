@@ -37,6 +37,28 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def setup_game_and_ui(args):
+    # Initialize game with specified difficulty
+    game = NoteGame(difficulty=args.difficulty)
+
+    # Initialize UI based on command line argument
+    if args.ui.lower() == "curses":
+        from tonal_recall.ui import CursesUI
+        ui = CursesUI()
+    else:
+        ui = PygameUI()
+        ui.init_screen()
+
+    # Set up game state
+    game.ui = ui
+    game.stats = {
+        "total_notes": 0,
+        "correct_notes": 0,
+        "times": [],
+        "notes_played": {},
+    }
+    return game, ui
+
 def main():
     # Parse command line arguments
     args = parse_arguments()
@@ -46,26 +68,7 @@ def main():
     logger = get_logger(__name__)
 
     try:
-        # Initialize game with specified difficulty
-        game = NoteGame(difficulty=args.difficulty)
-
-        # Initialize UI based on command line argument
-        if args.ui.lower() == "curses":
-            from tonal_recall.ui import CursesUI
-
-            ui = CursesUI()
-        else:
-            ui = PygameUI()
-            ui.init_screen()
-
-        # Set up game state
-        game.ui = ui
-        game.stats = {
-            "total_notes": 0,
-            "correct_notes": 0,
-            "times": [],
-            "notes_played": {},
-        }
+        game, ui = setup_game_and_ui(args)
 
         # Set up note detection callback
         def on_note_detected(note, signal_strength):
