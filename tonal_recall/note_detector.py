@@ -23,7 +23,7 @@ from .note_types import DetectedNote
 # Get logger for this module
 logger = logging.getLogger(__name__)
 
-# DetectedNote class moved to types.py
+# DeftectedNote class moved to types.py
 
 
 class NoteDetector:
@@ -216,8 +216,6 @@ class NoteDetector:
             f"Initialized NoteDetector with sample_rate={self._sample_rate}Hz, "
             f"min_confidence={self._min_confidence}, min_signal={self._min_signal}"
         )
-
-
 
     def start(self, callback: Callable[[DetectedNote, float], None]) -> bool:
         """Start the note detection audio stream.
@@ -820,7 +818,11 @@ class NoteDetector:
         return detected_freq
 
     def _update_note_stability(
-        self, detected_freq: float, confidence: float, signal_max: float, current_time: str
+        self,
+        detected_freq: float,
+        confidence: float,
+        signal_max: float,
+        current_time: str,
     ) -> None:
         """Update note stability based on the detected frequency and trigger callbacks."""
         detected = None
@@ -861,9 +863,7 @@ class NoteDetector:
         else:
             # 3. LISTENING STATE: No stable note, not in cooldown. Only show a
             #    newly detected note if it's a genuine attack.
-            is_attack = (
-                signal_max > self._last_signal_max * 1.8 and signal_max > 0.1
-            )
+            is_attack = signal_max > self._last_signal_max * 1.8 and signal_max > 0.1
             if is_attack:
                 self._current_note = detected
             else:
