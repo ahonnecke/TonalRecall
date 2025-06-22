@@ -9,7 +9,6 @@ from typing import (
     Optional,
     Callable,
     List,
-    Dict,
     Any,
     ClassVar,
     TypeAlias,
@@ -607,11 +606,16 @@ class NoteDetector:
                 pitch = raw_pitch[0]  # The frequency in Hz
                 confidence = self._pitch_detector.get_confidence()
 
-                dom_freq, bass_freqs, bass_magnitude = self._analyze_fft(audio_data)
-
-                detected_freq = self._select_and_correct_pitch(
-                    pitch, confidence, dom_freq, bass_freqs, bass_magnitude, signal_max
+                service = FrequencyService()
+                detected_freq = service.select_and_correct_pitch(
+                    pitch,
+                    confidence,
+                    signal_max,
+                    self._current_stable_note,
+                    audio_data,
+                    self._sample_rate,
                 )
+                dom_freq = service.fft_freq
 
                 current_time = time.strftime("%H:%M:%S")
                 if pitch > 0:
@@ -638,107 +642,6 @@ class NoteDetector:
         except Exception as e:
             logger.error(f"Error in audio_callback: {e}", exc_info=True)
             raise e
-
-    def _analyze_fft(self, audio_data: np.ndarray) -> float:
-        """Analyze the audio data with FFT to find the dominant frequency."""
-        # Apply a window function to reduce spectral leakage
-        window = np.hanning(len(audio_data))
-        windowed_data = audio_data * window
-
-        # Calculate FFT with zero-padding for better frequency resolution
-        n_fft = 4 * len(audio_data)
-        fft = np.fft.rfft(windowed_data, n=n_fft)
-        fft_freqs = np.fft.rfftfreq(n_fft, 1.0 / self._sample_rate)
-
-        # Get the magnitude spectrum
-        magnitude = np.abs(fft)
-
-        # Filter to focus on bass/guitar frequency range (30-500 Hz)
-        bass_range = (fft_freqs >= 30) & (fft_freqs <= 500)
-        bass_freqs = fft_freqs[bass_range]
-        bass_magnitude = magnitude[bass_range]
-
-        # Find the dominant frequency in the bass range
-        if len(bass_magnitude) > 0:
-            max_idx = np.argmax(bass_magnitude)
-            dom_freq = bass_freqs[max_idx]
-
-            # Snap to the closest standard note frequency if within a tolerance
-            def get_note_freq(note_idx, octave=4):
-                semitones_from_a4 = (note_idx - 9) + (octave - 4) * 12
-                return 440.0 * (2.0 ** (semitones_from_a4 / 12.0))
-
-            closest_note = min(
-                NoteDetector.STANDARD_NOTES,
-                key=lambda note: abs(
-                    get_note_freq(NoteDetector.STANDARD_NOTES.index(note)) - dom_freq
-                ),
-            )
-            note_freq = get_note_freq(NoteDetector.STANDARD_NOTES.index(closest_note))
-
-            if abs(dom_freq - note_freq) / note_freq < 0.05:
-                dom_freq = note_freq
-
-            return dom_freq, bass_freqs, bass_magnitude
-        return 0, np.array([]), np.array([])
-
-    def _select_and_correct_pitch(
-        self,
-        aubio_pitch: float,
-        aubio_confidence: float,
-        fft_freq: float,
-        bass_freqs: np.ndarray,
-        bass_magnitude: np.ndarray,
-        signal_max: float,
-    ) -> float:
-        """Select the best pitch, apply octave correction and weak signal handling."""
-        CONFIDENCE_THRESHOLD = 0.7
-        detected_freq = 0
-
-        if aubio_confidence >= CONFIDENCE_THRESHOLD and 30 < aubio_pitch < 1000:
-            detected_freq = aubio_pitch
-        elif 30 < fft_freq < 1000:
-            detected_freq = fft_freq
-
-        # Octave error correction for low notes
-        if 70 < detected_freq < 150 and len(bass_freqs) > 0:
-            sub_harmonic_freq = detected_freq / 2.0
-            tolerance_hz = 2.0
-            sub_harmonic_min = sub_harmonic_freq - tolerance_hz
-            sub_harmonic_max = sub_harmonic_freq + tolerance_hz
-
-            sub_harmonic_indices = np.where(
-                (bass_freqs >= sub_harmonic_min) & (bass_freqs <= sub_harmonic_max)
-            )
-            if len(sub_harmonic_indices[0]) > 0:
-                sub_harmonic_energy = np.sum(bass_magnitude[sub_harmonic_indices])
-
-                peak_indices = np.where(
-                    (bass_freqs >= detected_freq - tolerance_hz)
-                    & (bass_freqs <= detected_freq + tolerance_hz)
-                )
-                peak_energy = (
-                    np.sum(bass_magnitude[peak_indices])
-                    if len(peak_indices[0]) > 0
-                    else 0
-                )
-
-                if peak_energy > 0 and sub_harmonic_energy > (peak_energy * 0.3):
-                    logger.debug(
-                        f"Octave error detected. Original: {detected_freq:.1f}Hz. "
-                        f"Correcting to {sub_harmonic_freq:.1f}Hz."
-                    )
-                    detected_freq = sub_harmonic_freq
-
-        # If signal is weak, maintain the current stable note to prevent jumping
-        if signal_max < 0.05 and self._current_stable_note:
-            logger.debug(
-                f"Signal weak ({signal_max:.4f} < 0.05), "
-                f"maintaining current note: {self._current_stable_note.note_name}"
-            )
-            return self._current_stable_note.frequency
-
-        return detected_freq
 
     def _update_note_stability(
         self,
