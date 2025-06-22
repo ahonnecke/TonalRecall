@@ -320,8 +320,8 @@ class NoteDetector:
             return
 
         # Convert frequency to note name
-        note_name: Optional[str] = self._frequency_to_note(
-            pitch, use_flats=self._use_flats
+        note_name: Optional[str] = FrequencyService().frequency_to_note(
+            self.A4_FREQ, frequency, use_flats
         )
         if not note_name:
             return
@@ -351,21 +351,6 @@ class NoteDetector:
             except Exception as e:
                 logger.error(f"Error in note detection callback: {e}", exc_info=True)
                 raise e
-
-    def _frequency_to_note(self, frequency: float, use_flats: bool = False) -> str:
-        """Convert a frequency in Hz to the nearest note name.
-
-        Args:
-            frequency: The frequency in Hz to convert
-            use_flats: If True, use flat notes (e.g., Gb) instead of sharps (e.g., F#)
-
-        Returns:
-            str: The note name with octave (e.g., 'A4', 'F#2' or 'Gb2'), or empty string if invalid
-
-        Raises:
-            ValueError: If frequency is not a positive number
-        """
-        return FrequencyService().frequency_to_note(self.A4_FREQ, frequency, use_flats)
 
     def convert_note_notation(self, note_name: str, to_flats: bool = False) -> str:
         return convert_note_notation(self, note_name, to_flats)
