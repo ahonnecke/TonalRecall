@@ -321,7 +321,7 @@ class NoteDetector:
 
         # Convert frequency to note name
         note_name: Optional[str] = FrequencyService().frequency_to_note(
-            self.A4_FREQ, frequency, use_flats
+            self.A4_FREQ, pitch, use_flats=self._use_flats
         )
         if not note_name:
             return
