@@ -33,25 +33,32 @@ uv run python ./tonal_recall/main.py --difficulty 3 --duration 10
 
 ### Command Line Options
 
-- `--difficulty [1-3]`: Sets the game difficulty (see below for details)
+- `--difficulty [0-6]`: Sets the game difficulty (see below for details). Default is 3.
 
 ## 🎯 Difficulty Levels
 
 Choose the difficulty that matches your skill level:
 
+- **🧪 Level 0 (Test Mode):**
+  - A single note for testing purposes.
+
 - **🎵 Level 1 (Beginner):**
-  - Only open bass note (E, A, D, G)
+  - Open bass strings: `E`, `A`, `D`, `G`.
 
 - **🎸 Level 2 (Intermediate):**
-  - Only natural notes (A, B, C, D, E, F, G)
-
+  - All natural (whole) notes: `A`, `B`, `C`, `D`, `E`, `F`, `G`.
 
 - **🔥 Level 3 (Advanced):**
-  - Full chromatic scale
+  - Full chromatic scale with sharps.
 
-- **🎯 Level 4 (String Master):**
-  - Whole notes with string specification (e.g., "B, S0" for B on string 0)
-  - Tests both note recognition and string accuracy
+- **🎯 Level 4 (String Master 1):**
+  - Notes on the first few frets.
+
+- **🤘 Level 5 (String Master 2):**
+  - Expanded range of notes on specific strings.
+
+- **🏆 Level 6 (String Master 3):**
+  - Widest range of notes across the fretboard.
 
 ## 🛠️ Requirements
 
