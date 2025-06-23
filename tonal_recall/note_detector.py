@@ -563,14 +563,14 @@ class NoteDetector:
             raise e
 
     def _audio_callback(
-        self, indata: np.ndarray, frames: int, stream_time: dict, status: Any
+        self, indata: np.ndarray, _frames: int, _stream_time: dict, status: Any
     ) -> None:
         """Callback for processing audio data
 
         Args:
             indata: Input audio data as numpy array
-            frames: Number of frames in the buffer
-            stream_time: Dictionary containing timing information
+            _frames: Number of frames in the buffer
+            _stream_time: Dictionary containing timing information
             status: PortAudio status flags
         """
         try:

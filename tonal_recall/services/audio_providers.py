@@ -40,7 +40,7 @@ class LiveAudioProvider(IAudioProvider):
             self._stream = None
 
     def _audio_callback(
-        self, indata: np.ndarray, frames: int, time_info, status
+        self, indata: np.ndarray, _frames: int, _time_info, status
     ) -> None:
         if status:
             print(status, flush=True)

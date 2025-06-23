@@ -280,7 +280,7 @@ class NoteGame:
         """Update the game display"""
         # Only safe to call from main thread! (CursesUI: always, PygameUI: only from main loop)
         if self.ui:
-            self.ui.update_display(self, show_octave=(self.difficulty >= 4))
+            self.ui.update_display(self)
 
     def start_game(self, duration=60):
         """Start the game with the specified duration in seconds"""
