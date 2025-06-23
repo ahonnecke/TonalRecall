@@ -148,8 +148,8 @@ class NoteGame:
         )
         self.game_start_time = 0  # Track when the game started
         self.time_remaining = 0
-        self.ui = None
         self.event_queue = queue.Queue()
+        self.matched_notes = []
         self.stats = {
             "total_notes": 0,
             "correct_notes": 0,
@@ -161,14 +161,21 @@ class NoteGame:
         self.TEST_NOTE = "F"
 
         # Set difficulty level
-        self.difficulty = max(0, min(max(self.note_sets.keys()), int(difficulty)))
+        self.difficulty = difficulty
+        if self.difficulty in self.note_sets:
+            self.available_notes = self.note_sets[self.difficulty]
+        else:
+            logger.warning(
+                f"Invalid difficulty level: {self.difficulty}. Defaulting to 3."
+            )
+            self.difficulty = 3
+            self.available_notes = self.note_sets[self.difficulty]
 
-        self.note_sets[0] = [self.TEST_NOTE]
-
-        # Set available notes based on difficulty
-        self.available_notes = self.note_sets.get(
-            self.difficulty, self.note_sets[3]
-        )  # Default to level 3
+        # If in test mode, override available notes
+        if self.difficulty == 0:
+            self.test_mode = True
+            self.test_note = self.TEST_NOTE
+            self.available_notes = [self.test_note]
 
         logger.debug(
             "NoteGame initialized with %d available notes", len(self.available_notes)
@@ -235,6 +242,7 @@ class NoteGame:
             elapsed = time.time() - self.last_note_change_time
             self.stats["times"].append(elapsed)
             self.stats["correct_notes"] += 1
+            self.matched_notes.append((target_note, elapsed))
             logger.info(
                 "NOTE MATCHED! '%s' matches target '%s' in %.2f seconds",
                 played_note_full,
@@ -272,63 +280,30 @@ class NoteGame:
             self.stats["correct_notes"],
             self.stats["total_notes"],
         )
+        if self.detector and self.detector.is_running():
+            self.detector.stop()
 
-        # Don't stop the detector here - let the UI handle cleanup
-        # to avoid threading issues
+    def start(self):
+        """Initializes the game state for a new game and starts the detector."""
+        if self.running:
+            logger.warning("Game is already running. Resetting.")
 
-    def update_display(self) -> None:
-        """Update the game display"""
-        # Only safe to call from main thread! (CursesUI: always, PygameUI: only from main loop)
-        if self.ui:
-            self.ui.update_display(self)
+        self.running = True
+        self.game_start_time = time.time()
+        self.stats = {
+            "total_notes": 0,
+            "correct_notes": 0,
+            "times": [],
+            "notes_played": {},
+            "notes_per_second": 0.0,
+        }
+        self.matched_notes = []
+        self.event_queue = queue.Queue()
 
-    def start_game(self, duration=60):
-        """Start the game with the specified duration in seconds"""
-        if not hasattr(self, "ui") or self.ui is None:
-            raise ValueError(
-                "UI instance not set. Please set game.ui before starting the game."
-            )
+        self.pick_new_target()
+        self.last_note_change_time = time.time()
 
-        try:
-            # Initialize the UI
-            if hasattr(self.ui, "init_screen"):
-                self.screen = self.ui.init_screen()
+        if self.detector:
+            self.detector.start(callback=self.note_detected_callback)
 
-            # Initialize game state
-            self.running = True
-            self.game_start_time = time.time()
-            self.start_time = time.time()
-            self.time_remaining = duration
-            self.stats = {
-                "total_notes": 0,
-                "correct_notes": 0,
-                "times": [],
-                "notes_played": {},
-            }
-
-            # Start with a target note and set the initial time
-            self.pick_new_target()
-            self.last_note_change_time = time.time()  # Initialize the note change time
-
-            # Update the display with initial state
-            self.update_display()
-
-            # Start the note detector
-            if not self.detector.start(callback=self.note_detected_callback):
-                raise RuntimeError("Failed to start note detector")
-
-            if self.test_note:
-                logger.info(f"Test started: {self.test_note} for {duration} seconds")
-
-            if duration:
-                logger.info(f"Game started with {duration} second duration")
-
-        except Exception as e:
-            logger.error(f"Error starting game: {e}")
-            self.stop_game()
-            raise
-
-    def show_stats(self) -> None:
-        """Show game statistics"""
-        if self.ui:
-            self.ui.show_stats(self)
+        logger.info("Game started.")

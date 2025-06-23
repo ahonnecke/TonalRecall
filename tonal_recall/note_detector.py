@@ -78,6 +78,7 @@ class NoteDetector:
     def __init__(
         self,
         device_id: Optional[int] = None,
+        gain: float = 1.0,
         silence_threshold_db: float = -90,
         tolerance: float = 0.8,
         min_stable_count: int = 3,
@@ -117,6 +118,7 @@ class NoteDetector:
             else self.FRAMES_PER_BUFFER
         )
         self._channels = int(channels) if channels is not None else self.CHANNELS
+        self._gain = float(gain)
 
         # Detection parameters with type conversion
         self._silence_threshold_db = float(silence_threshold_db)
@@ -579,8 +581,11 @@ class NoteDetector:
                     logger.warning("Input overflow")
                     return  # Skip processing this buffer on overflow
 
-            # Get the audio data and check levels
+            # Get the audio data and apply gain
             audio_data = indata[:, 0] if indata.shape[1] > 0 else indata.flatten()
+            if self._gain != 1.0:
+                audio_data = audio_data * self._gain
+            np.clip(audio_data, -1.0, 1.0, out=audio_data)
             signal_max = np.max(np.abs(audio_data))
 
             # Buffer size check: skip if not expected length

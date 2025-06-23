@@ -1,8 +1,11 @@
 # 🎵 Tonal Recall - Guitar Note Trainer 🎸
 
-[![Watch the Demo](https://github.com/user-attachments/assets/a4161f87-a3e1-4ae5-bcc8-104d18062fa2)](https://github.com/user-attachments/assets/a4161f87-a3e1-4ae5-bcc8-104d18062fa2)
+![Image](https://github.com/user-attachments/assets/d29e66f2-6dc5-441e-aa1a-99b5956d2ef3)
 
-*Click the image above to watch the demo video!*
+![Image](https://github.com/user-attachments/assets/610dbeed-bd38-409c-8695-94cc5cfd815a)
+
+![Image](https://github.com/user-attachments/assets/2d3fb2d9-4b9f-4e5d-b020-8418fb3fa23f)
+[Demo](https://github.com/user-attachments/assets/a4161f87-a3e1-4ae5-bcc8-104d18062fa2)](https://github.com/user-attachments/assets/a4161f87-a3e1-4ae5-bcc8-104d18062fa2)
 
 Tonal Recall is an interactive guitar training application that helps you learn and master notes on the guitar fretboard through fun, real-time feedback. Perfect for beginners and intermediate players looking to improve their fretboard knowledge and ear training.
 

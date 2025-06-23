@@ -33,55 +33,44 @@ _console_handler: Optional[logging.Handler] = None
 _logger_cache: Dict[str, logging.Logger] = {}
 
 
-def setup_logging(force_level: Optional[int] = None) -> None:
+def setup_logging(level: Optional[str] = None) -> None:
     """Set up logging configuration for the application.
 
     Args:
-        force_level: If provided, override all log levels with this level.
+        level: If provided, override all 'tonal_recall' log levels with this level (e.g., "DEBUG").
     """
     global _console_handler
 
-    # Configure root logger to show only errors
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.ERROR)
+    # Create a single, shared console handler if it doesn't exist
+    if _console_handler is None:
+        _console_handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        _console_handler.setFormatter(formatter)
 
-    # Clear all existing handlers and disable propagation for all loggers
-    for logger_name in logging.root.manager.loggerDict:
-        logger = logging.getLogger(logger_name)
+    # Determine log levels
+    log_levels = MODULE_LOG_LEVELS.copy()
+    if level:
+        numeric_level = logging.getLevelName(level.upper())
+        if isinstance(numeric_level, int):
+            for module_name in log_levels:
+                if module_name.startswith("tonal_recall"):
+                    log_levels[module_name] = numeric_level
+        else:
+            logging.getLogger(__name__).error(f"Invalid log level: {level}")
+
+    # Apply module-specific levels
+    for module_name, module_level in log_levels.items():
+        logger = logging.getLogger(module_name if module_name else "")
+        logger.setLevel(module_level)
+
+        # Clear existing handlers and add the shared one
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)
-        logger.propagate = False
-
-    # Clear root handlers
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-
-    # Create console handler with a formatter
-    _console_handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    _console_handler.setFormatter(formatter)
-
-    # Apply log levels
-    if force_level is not None:
-        # Apply forced level to all loggers
-        for logger_name in logging.root.manager.loggerDict:
-            logger = logging.getLogger(logger_name)
-            logger.setLevel(force_level)
-            # Only add handler if this is one of our loggers
-            if logger_name.startswith("tonal_recall"):
-                logger.addHandler(_console_handler)
-                logger.propagate = False
-    else:
-        # Apply module-specific levels
-        for module_name, module_level in MODULE_LOG_LEVELS.items():
-            logger = logging.getLogger(
-                module_name if module_name else None
-            )  # Empty string for root
-            logger.setLevel(module_level)
+        if _console_handler not in logger.handlers:
             logger.addHandler(_console_handler)
-            logger.propagate = False
+        logger.propagate = False
 
     # Confirm setup complete
     logging.getLogger("tonal_recall").info("Logging configuration complete")

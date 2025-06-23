@@ -1,28 +1,30 @@
 #!/usr/bin/env python3
 
-import time
 import argparse
-import pygame
-from tonal_recall.logger import get_logger
+
 from tonal_recall.logging_config import setup_logging
 from tonal_recall.note_game_core import NoteGame
 from tonal_recall.ui import PygameUI
-from tonal_recall.stats import update_stats
+from tonal_recall.note_detector import NoteDetector
+from tonal_recall.logger import get_logger
 
 
 def parse_arguments():
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Tonal Recall - A musical note training game"
     )
+
+    # UI settings
     parser.add_argument(
         "--ui",
         type=str,
         default="pygame",
-        choices=["pygame", "curses"],
-        help="UI to use (default: pygame)",
+        choices=["pygame"],
+        help="UI to use (default: pygame). Curses is not supported.",
     )
 
-    # Dynamically set the choices for difficulty from the NoteGame class
+    # Game settings
     difficulty_levels = sorted(NoteGame.note_sets.keys())
     parser.add_argument(
         "--difficulty",
@@ -32,81 +34,67 @@ def parse_arguments():
         help=f"Game difficulty level from {min(difficulty_levels)} to {max(difficulty_levels)}. (default: 3)",
     )
 
+    # Audio settings
+    parser.add_argument("--device", type=int, help="Audio input device ID.")
     parser.add_argument(
-        "--duration",
+        "--sample-rate",
         type=int,
-        default=60,
-        help="Game duration in seconds (default: 60)",
+        default=48000,
+        help="Audio sample rate (default: 48000).",
     )
+    parser.add_argument(
+        "--gain",
+        type=float,
+        default=1.0,
+        help="Audio input gain. Note: This is not currently implemented in NoteDetector.",
+    )
+
+    # Debugging
+    parser.add_argument(
+        "--debug", action="store_true", help="Enable debug logging."
+    )
+
     return parser.parse_args()
 
 
-def setup_game_and_ui(args):
-    # Initialize game with specified difficulty
-    game = NoteGame(difficulty=args.difficulty)
-
-    # Initialize UI based on command line argument
-    if args.ui.lower() == "curses":
-        from tonal_recall.ui import CursesUI
-
-        ui = CursesUI()
-    else:
-        ui = PygameUI()
-        ui.init_screen()
-
-    # Set up game state
-    game.ui = ui
-    game.stats = {
-        "total_notes": 0,
-        "correct_notes": 0,
-        "times": [],
-        "notes_played": {},
-    }
-    return game, ui
-
-
 def main():
-    # Parse command line arguments
+    """Main entry point for the Tonal Recall game."""
     args = parse_arguments()
 
     # Configure logging
-    setup_logging()
+    setup_logging(level="DEBUG" if args.debug else "INFO")
     logger = get_logger(__name__)
 
     try:
-        game, ui = setup_game_and_ui(args)
+        ui = PygameUI()
 
-        # Run the game
-        game_duration = args.duration  # Use duration from command line
-        if hasattr(game, "test_mode") and game.test_mode:
-            game_duration = game.test_duration
+        def game_factory():
+            """Factory to create a new game instance with a configured detector."""
+            logger.info("Creating new game instance via factory.")
 
-        game.start_game(duration=game_duration)
-        ui.run_game_loop(game, game_duration)
+            detector_config = {
+                "device_id": args.device,
+                "sample_rate": args.sample_rate,
+                "gain": args.gain,
+            }
+            detector_config = {
+                k: v for k, v in detector_config.items() if v is not None
+            }
 
-        # Show final stats
-        played_duration = game_duration - game.time_remaining
-        correct_notes = game.stats["correct_notes"]
-        nps = correct_notes / played_duration if played_duration > 0 else 0
-        fastest = min(game.stats["times"]) if game.stats["times"] else None
+            detector = NoteDetector(**detector_config)
 
-        # Update and show persistent stats
-        persistent_stats, _ = update_stats(nps, fastest)
-        ui.show_stats(game, persistent_stats)
 
-        # Keep the window open until closed
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    return
-            time.sleep(0.1)
+            game = NoteGame(note_detector=detector, difficulty=args.difficulty)
+            return game
+
+        # The PygameUI.run() method now controls the entire application lifecycle.
+        ui.run(game_factory)
 
     except Exception:
-        logger.exception("Error in main game loop")
+        logger.exception("An unhandled error occurred in the main application.")
         raise
     finally:
-        if "ui" in locals():
-            ui.cleanup()
+        logger.info("Tonal Recall is shutting down.")
 
 
 if __name__ == "__main__":

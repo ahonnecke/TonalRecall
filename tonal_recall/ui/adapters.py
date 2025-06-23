@@ -6,7 +6,6 @@ from typing import Callable, Dict, Any, List
 from ..logger import get_logger
 from ..note_types import DetectedNote
 from ..core.interfaces import INoteDetectionService
-from ..core.events import NoteDetectionEvents
 
 logger = get_logger(__name__)
 
@@ -21,7 +20,7 @@ class UIAdapter(ABC):
             note_detection_service: Note detection service to use
         """
         self._note_detection_service = note_detection_service
-        self._events = NoteDetectionEvents()
+        self._events = None # Events system refactored out
         self._running = False
 
     @abstractmethod
@@ -119,168 +118,78 @@ class UIAdapter(ABC):
             timestamp: The timestamp when the note was detected
         """
         # Emit the note detected event for UI components to handle
-        self._events.emit_note_detected(note, timestamp)
+        if self._events:
+            self._events.emit_note_detected(note, timestamp)
 
 
 class PygameAdapter(UIAdapter):
-    """Adapter for Pygame UI."""
+    """Adapter for Pygame UI that now uses the self-contained PygameUI class."""
 
     def __init__(
         self,
         note_detection_service: INoteDetectionService,
         config: Dict[str, Any] = None,
     ):
-        """Initialize the Pygame adapter.
-
-        Args:
-            note_detection_service: Note detection service to use
-            config: Configuration options
-        """
+        """Initialize the Pygame adapter."""
         super().__init__(note_detection_service)
         self._config = config or {}
-        self._pygame = None
-        self._clock = None
-        self._screen = None
-        self._font = None
-        self._note_callbacks: List[Callable[[DetectedNote, float], None]] = []
+        from tonal_recall.ui import PygameUI
+
+        self.ui = PygameUI()
 
     def initialize(self) -> bool:
-        """Initialize the Pygame UI.
+        """Initialize the Pygame UI."""
+        return self.ui.init_screen()
 
-        Returns:
-            True if initialization was successful, False otherwise
+    def start(self) -> bool:
+        """Start the Pygame UI and run the game.
+
+        This method is now blocking and will run the entire game flow.
         """
-        try:
-            # Import pygame here to avoid dependency if not used
-            import pygame
-
-            self._pygame = pygame
-
-            pygame.init()
-
-            # Set up the display
-            width = self._config.get("width", 800)
-            height = self._config.get("height", 600)
-            self._screen = pygame.display.set_mode((width, height))
-            pygame.display.set_caption(self._config.get("title", "Tonal Recall"))
-
-            # Set up the clock
-            self._clock = pygame.time.Clock()
-
-            # Set up the font
-            font_size = self._config.get("font_size", 36)
-            try:
-                self._font = pygame.font.Font(None, font_size)
-            except Exception:  # Broad exception for font loading
-                self._font = pygame.font.SysFont("Arial", font_size)
-
-            logger.info("Pygame UI initialized")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to initialize Pygame UI: {e}")
+        if not self.ui.initialized:
+            logger.error("UI not initialized. Cannot start.")
             return False
 
-    def update(self, delta_time: float) -> bool:
-        """Update the Pygame UI.
+        from ..note_game_core import NoteGame
+        from ..note_detector import NoteDetector
 
-        Args:
-            delta_time: Time elapsed since last update in seconds
+        def game_factory():
+            """Factory to create a new game instance."""
+            detector_config = {
+                "device_id": self._config.get("device"),
+                "sample_rate": self._config.get("sample_rate", 48000),
+                "min_confidence": self._config.get("min_confidence", 0.7),
+                "min_signal": 0.01,  
+                "harmonic_correction": self._config.get("harmonic_correction", True),
+            }
+            detector_config = {k: v for k, v in detector_config.items() if v is not None}
 
-        Returns:
-            True to continue running, False to exit
-        """
-        if not self._pygame:
-            return False
+            detector = NoteDetector(**detector_config)
+            game = NoteGame(
+                note_detector=detector, difficulty=self._config.get("difficulty", 3)
+            )
+            game.start()
+            return game
 
-        # Handle events
-        for event in self._pygame.event.get():
-            if event.type == self._pygame.QUIT:
-                return False
-            elif event.type == self._pygame.KEYDOWN:
-                if event.key == self._pygame.K_ESCAPE:
-                    return False
-
-        # Update the clock
-        self._clock.tick(60)
-
+        duration = self._config.get("duration", 60)
+        self.ui.run(game_factory, duration)
         return True
 
+    def stop(self) -> None:
+        """Stop the UI and clean up resources."""
+        self.ui.cleanup()
+
+    def update(self, delta_time: float) -> bool:
+        """Update method is no longer used as PygameUI runs its own loop."""
+        return self.ui.initialized
+
     def render(self) -> None:
-        """Render the Pygame UI."""
-        if not self._pygame or not self._screen:
-            return
-
-        # Clear the screen
-        self._screen.fill((0, 0, 0))
-
-        # Get the current note
-        note = self._note_detection_service.get_current_note()
-
-        # Render the note
-        if note:
-            text = self._font.render(f"Note: {note.name}", True, (255, 255, 255))
-            text_rect = text.get_rect(
-                center=(self._screen.get_width() // 2, self._screen.get_height() // 2)
-            )
-            self._screen.blit(text, text_rect)
-
-            # Render the frequency
-            freq_text = self._font.render(
-                f"Frequency: {note.frequency:.1f} Hz", True, (200, 200, 200)
-            )
-            freq_rect = freq_text.get_rect(
-                center=(
-                    self._screen.get_width() // 2,
-                    self._screen.get_height() // 2 + 50,
-                )
-            )
-            self._screen.blit(freq_text, freq_rect)
-
-            # Render the confidence
-            conf_text = self._font.render(
-                f"Confidence: {note.confidence:.2f}", True, (200, 200, 200)
-            )
-            conf_rect = conf_text.get_rect(
-                center=(
-                    self._screen.get_width() // 2,
-                    self._screen.get_height() // 2 + 100,
-                )
-            )
-            self._screen.blit(conf_text, conf_rect)
-        else:
-            text = self._font.render("No note detected", True, (150, 150, 150))
-            text_rect = text.get_rect(
-                center=(self._screen.get_width() // 2, self._screen.get_height() // 2)
-            )
-            self._screen.blit(text, text_rect)
-
-        # Update the display
-        self._pygame.display.flip()
+        """Render method is no longer used."""
+        pass
 
     def cleanup(self) -> None:
         """Clean up Pygame resources."""
-        if self._pygame:
-            self._pygame.quit()
-            logger.info("Pygame UI cleaned up")
-
-    def _setup_event_handlers(self) -> None:
-        """Set up event handlers for note detection events."""
-        self._events.on_note_detected(self._handle_note_detected)
-
-    def _handle_note_detected(self, note: DetectedNote, timestamp: float) -> None:
-        """Handle note detection events.
-
-        Args:
-            note: The detected note
-            timestamp: The timestamp when the note was detected
-        """
-        # Call all registered callbacks
-        for callback in self._note_callbacks:
-            try:
-                callback(note, timestamp)
-            except Exception as e:
-                logger.error(f"Error in note callback: {e}")
+        self.ui.cleanup()
 
 
 class CursesAdapter(UIAdapter):
@@ -462,7 +371,8 @@ class CursesAdapter(UIAdapter):
 
     def _setup_event_handlers(self) -> None:
         """Set up event handlers for note detection events."""
-        self._events.on_note_detected(self._handle_note_detected)
+        if self._events:
+            self._events.on_note_detected(self._handle_note_detected)
 
     def _handle_note_detected(self, note: DetectedNote, timestamp: float) -> None:
         """Handle note detection events.
