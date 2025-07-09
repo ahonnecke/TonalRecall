@@ -218,14 +218,18 @@ class PygameUI:
             self.screen.blit(played_surface, played_note_rect)
 
         # Display hint if last note was incorrect
-        if (
-            hasattr(game, "last_match_was_correct")
-            and game.last_match_was_correct is False
-        ):
-            hint_surf = self.medium_font.render("Hint", True, (255, 100, 100))
-            hint_y = self.height // 2 + 160
-            hint_rect = hint_surf.get_rect(center=(self.width / 2, hint_y))
-            self.screen.blit(hint_surf, hint_rect)
+        if game.last_match_was_correct is not None:
+            match_text = "MATCH!" if game.last_match_was_correct else "NO MATCH"
+            match_color = (0, 255, 0) if game.last_match_was_correct else (255, 0, 0)
+            match_surf = self.medium_font.render(match_text, True, match_color)
+            match_rect = match_surf.get_rect(center=(self.width / 2, 400))
+            self.screen.blit(match_surf, match_rect)
+
+            # Display hint if available and the match was incorrect
+            if not game.last_match_was_correct and game.last_hint:
+                hint_surf = self.small_font.render(game.last_hint, True, self.text_color)
+                hint_rect = hint_surf.get_rect(center=(self.width / 2, 450))
+                self.screen.blit(hint_surf, hint_rect)
 
         # Draw recent matched notes
         if game.matched_notes:

@@ -11,6 +11,47 @@ from .note_types import DetectedNote
 logger = get_logger(__name__)
 
 
+note_to_positions = {
+    "G2": [("G", 0), ("D", 5), ("A", 10), ("E", 15)],
+    "G#2": [("G", 1), ("D", 6), ("A", 11), ("E", 16)],
+    "A2": [("G", 2), ("D", 7), ("A", 12), ("E", 17)],
+    "A#2": [("G", 3), ("D", 8), ("A", 13), ("E", 18)],
+    "B2": [("G", 4), ("D", 9), ("A", 14), ("E", 19)],
+    "C3": [("G", 5), ("D", 10), ("A", 15), ("E", 20)],
+    "C#3": [("G", 6), ("D", 11), ("A", 16), ("E", 21)],
+    "D3": [("G", 7), ("D", 12), ("A", 17)],
+    "D#3": [("G", 8), ("D", 13), ("A", 18)],
+    "E3": [("G", 9), ("D", 14), ("A", 19)],
+    "F3": [("G", 10), ("D", 15), ("A", 20)],
+    "F#3": [("G", 11), ("D", 16), ("A", 21)],
+    "G3": [("G", 12), ("D", 17)],
+    "G#3": [("G", 13), ("D", 18)],
+    "A3": [("G", 14), ("D", 19)],
+    "A#3": [("G", 15), ("D", 20)],
+    "B3": [("G", 16), ("D", 21)],
+    "C4": [("G", 17)],
+    "C#4": [("G", 18)],
+    "D4": [("G", 19)],
+    "D#4": [("G", 20)],
+    "E4": [("G", 21)],
+    "D2": [("D", 0), ("A", 5), ("E", 10)],
+    "D#2": [("D", 1), ("A", 6), ("E", 11)],
+    "E2": [("D", 2), ("A", 7), ("E", 12)],
+    "F2": [("D", 3), ("A", 8), ("E", 13)],
+    "F#2": [("D", 4), ("A", 9), ("E", 14)],
+    "A1": [("A", 0), ("E", 5)],
+    "A#1": [("A", 1), ("E", 6)],
+    "B1": [("A", 2), ("E", 7)],
+    "C2": [("A", 3), ("E", 8)],
+    "C#2": [("A", 4), ("E", 9)],
+    "E1": [("E", 0)],
+    "F1": [("E", 1)],
+    "F#1": [("E", 2)],
+    "G1": [("E", 3)],
+    "G#1": [("E", 4)],
+}
+
+
 class NoteGame:
     note_sets = {
         0: ["F"],  # Single note (test mode), will be replaced by TEST_NOTE in __init__
@@ -158,6 +199,7 @@ class NoteGame:
         self.test_mode = bool(target_note)
         self.test_note = target_note
         self.last_match_was_correct = None
+        self.last_hint = ""
 
         if self.test_mode:
             # In test mode, difficulty is 0 and we only use the target note.
@@ -240,6 +282,7 @@ class NoteGame:
             self.stats["times"].append(elapsed)
             self.stats["correct_notes"] += 1
             self.matched_notes.append((target_note, elapsed))
+            self.last_hint = ""  # Clear hint on correct match
             logger.info(
                 "NOTE MATCHED! '%s' matches target '%s' in %.2f seconds",
                 played_note_full,
@@ -248,6 +291,17 @@ class NoteGame:
             )
             self.pick_new_target()
             return True
+        else:
+            # Generate hint if the note is wrong
+            positions = note_to_positions.get(target_note, [])
+            if positions:
+                hint_parts = []
+                for string, fret in positions:
+                    fret_display = "open" if fret == 0 else f"{fret}th fret"
+                    hint_parts.append(f"{string} string, {fret_display}")
+                self.last_hint = "Try: " + "\n".join(hint_parts)
+            else:
+                self.last_hint = ""
 
         return False
 
@@ -266,6 +320,7 @@ class NoteGame:
 
         # Reset hint state and update timestamp
         self.last_note_change_time = time.time()
+        self.last_hint = ""
 
         if self.current_target != old_target:
             logger.debug(
