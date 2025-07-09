@@ -79,7 +79,7 @@ class NoteDetector:
         self,
         device_id: Optional[int] = None,
         gain: float = 1.0,
-        silence_threshold_db: float = -90,
+        silence_threshold_db: float = -20,
         tolerance: float = 0.8,
         min_stable_count: int = 3,
         stability_majority: float = 0.7,
@@ -176,6 +176,7 @@ class NoteDetector:
         )
         self._pitch_detector.set_unit("Hz")
         self._pitch_detector.set_tolerance(self._tolerance)
+        self._pitch_detector.set_silence(self._silence_threshold_db)
 
         # Initialize audio device
         try:

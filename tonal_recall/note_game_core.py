@@ -159,6 +159,7 @@ class NoteGame:
             "high_score_nps": 0.0,
         }
         self.TEST_NOTE = "F"
+        self.last_match_was_correct = None
 
         # Set difficulty level
         self.difficulty = difficulty
@@ -230,6 +231,7 @@ class NoteGame:
         match_result = self.note_matcher.match(
             target_note, played_note_full, match_octave=self.difficulty >= 4
         )
+        self.last_match_was_correct = match_result
 
         logger.debug(
             "Matching - Target: '%s' vs Played: '%s' -> %s",
@@ -261,7 +263,7 @@ class NoteGame:
             # In normal mode, pick a random note from available notes for current difficulty
             self.current_target = random.choice(self.available_notes)
 
-        # Update the timestamp when the target note changes
+        # Reset hint state and update timestamp
         self.last_note_change_time = time.time()
 
         logger.debug(

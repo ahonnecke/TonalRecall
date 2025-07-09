@@ -43,10 +43,13 @@ def parse_arguments():
         help="Audio sample rate (default: 48000).",
     )
     parser.add_argument(
-        "--gain",
+        "--gain", type=float, default=1.0, help="Audio gain factor."
+    )
+    parser.add_argument(
+        "--silence",
         type=float,
-        default=1.0,
-        help="Audio input gain. Note: This is not currently implemented in NoteDetector.",
+        default=-60,
+        help="Silence threshold in dB. Notes quieter than this will be ignored.",
     )
 
     # Debugging
@@ -76,6 +79,7 @@ def main():
                 "device_id": args.device,
                 "sample_rate": args.sample_rate,
                 "gain": args.gain,
+                "silence_threshold_db": args.silence,
             }
             detector_config = {
                 k: v for k, v in detector_config.items() if v is not None

@@ -173,84 +173,73 @@ class PygameUI:
         if not self.initialized or not self.screen:
             return
 
-        # Clear screen
         self.screen.fill(self.bg_color)
 
-        # Draw header with time remaining
-        header_rect = pygame.Rect(0, 0, self.width, 80)
-        pygame.draw.rect(self.screen, (30, 30, 40), header_rect)
+        # Display target note
+        target_note_surf = self.large_font.render(
+            f"Play: {game.current_target}", True, self.text_color
+        )
+        target_note_rect = target_note_surf.get_rect(
+            center=(self.width / 2, self.height / 2 - 100)
+        )
+        self.screen.blit(target_note_surf, target_note_rect)
 
-        # Draw time remaining
-        time_str = f"Time: {int(game.time_remaining)}s"
-        time_surface = self.medium_font.render(time_str, True, (200, 200, 255))
-        time_rect = time_surface.get_rect(midtop=(self.width // 2, 20))
-        self.screen.blit(time_surface, time_rect)
+        # Display timer
+        timer_text = f"Time: {int(game.time_remaining)}"
+        timer_surf = self.medium_font.render(timer_text, True, (255, 255, 255))
+        timer_rect = timer_surf.get_rect(topright=(self.width - 20, 20))
+        self.screen.blit(timer_surf, timer_rect)
 
-        # Draw score
-        score_str = f"Score: {game.stats['correct_notes']}"
-        score_surface = self.medium_font.render(score_str, True, (200, 255, 200))
-        score_rect = score_surface.get_rect(topright=(self.width - 20, 20))
-        self.screen.blit(score_surface, score_rect)
+        # Display score
+        score_text = f"Score: {game.stats['correct_notes']}"
+        score_surf = self.medium_font.render(score_text, True, (255, 255, 255))
+        score_rect = score_surf.get_rect(topleft=(20, 20))
+        self.screen.blit(score_surf, score_rect)
 
-        # Draw target note
-        if game.current_target:
-            # Large target note in the center
-            target_surface = self.large_font.render(
-                str(game.current_target), True, self.text_color
-            )
-            target_rect = target_surface.get_rect(
-                center=(self.width // 2, self.height // 2 - 40)
-            )
-            self.screen.blit(target_surface, target_rect)
+        # Display notes per second
+        nps_text = f"NPS: {game.stats.get('notes_per_second', 0.0):.2f}"
+        nps_surf = self.medium_font.render(nps_text, True, (255, 255, 255))
+        nps_rect = nps_surf.get_rect(topleft=(20, 60))
+        self.screen.blit(nps_surf, nps_rect)
 
-            # Draw "Play this note" text above
-            prompt_surface = self.medium_font.render(
-                "Play this note:", True, (200, 200, 255)
-            )
-            prompt_rect = prompt_surface.get_rect(
-                midbottom=(self.width // 2, self.height // 2 - 80)
-            )
-            self.screen.blit(prompt_surface, prompt_rect)
-
-        # Draw current note being played
-        if hasattr(game, "current_note") and game.current_note:
-            played_note = game.current_note
-
-            # Handle both string and DetectedNote objects
-            if hasattr(played_note, "name"):  # It's a DetectedNote
-                position_info = (
-                    f" at {played_note.position}"
-                    if hasattr(played_note, "position") and played_note.position
-                    else ""
-                )
-                note_name = played_note.name
-            else:  # It's a string
-                position_info = ""
-                note_name = (
-                    played_note.note_name
-                    if hasattr(played_note, "note_name")
-                    else str(played_note)
-                )
-
-            # Display detected note
+        # Display currently played note
+        if game.current_note:
+            note_name = game.current_note.note_name
+            position_info = ""
+            if hasattr(game.current_note, "string_num") and game.current_note.string_num is not None:
+                position_info = f" on S{game.current_note.string_num}"
+            played_note_y = self.height // 2 + 100
             played_surface = self.medium_font.render(
                 f"Detected: {note_name}{position_info}", True, self.secondary_color
             )
-            played_rect = played_surface.get_rect(
-                center=(self.width // 2, self.height // 2 + 100)
+            played_note_rect = played_surface.get_rect(
+                center=(self.width // 2, played_note_y)
             )
-            self.screen.blit(played_surface, played_rect)
+            self.screen.blit(played_surface, played_note_rect)
+
+        # Display hint if last note was incorrect
+        if (
+            hasattr(game, "last_match_was_correct")
+            and game.last_match_was_correct is False
+        ):
+            hint_surf = self.medium_font.render("Hint", True, (255, 100, 100))
+            hint_y = self.height // 2 + 160
+            hint_rect = hint_surf.get_rect(center=(self.width / 2, hint_y))
+            self.screen.blit(hint_surf, hint_rect)
 
         # Draw recent matched notes
         if game.matched_notes:
             y_pos = self.height - 40
-            for note, duration in reversed(game.matched_notes[-5:]):
-                match_text = f"Matched: {note} in {duration:.2f}s"
-                match_surface = self.small_font.render(
-                    match_text, True, (200, 255, 200)
+            for i, (note, t) in enumerate(reversed(game.matched_notes[-5:])):
+                text = f"Matched {note} in {t:.2f}s"
+                color = (
+                    (150, 255, 150)
+                    if i == 0
+                    else (100, 150, 100)
                 )
-                match_rect = match_surface.get_rect(bottomright=(self.width - 20, y_pos))
-                self.screen.blit(match_surface, match_rect)
+                match_surf = self.small_font.render(text, True, color)
+                match_rect = match_surf.get_rect(bottomright=(self.width - 20, y_pos))
+                self.screen.blit(match_surf, match_rect)
                 y_pos -= 30
 
         pygame.display.flip()
