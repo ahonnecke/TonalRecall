@@ -118,18 +118,17 @@ class NoteGame:
     """A simple game to practice playing notes on a guitar or bass"""
 
     def __init__(
-        self, note_detector: Optional[NoteDetector] = None, difficulty: int = 3
+        self,
+        note_detector: Optional[NoteDetector] = None,
+        difficulty: int = 3,
+        target_note: Optional[str] = None,
     ) -> None:
         """Initialize the game.
 
         Args:
-            note_detector: Optional, a NoteDetector-like instance for dependency injection/testing
-            difficulty: Game difficulty level (0-4). Default is 3 (half notes).
-                       0: Single note (test mode)
-                       1: Open strings (E, A, D, G)
-                       2: Whole notes (A, B, C, D, E, F, G)
-                       3: Half notes (chromatic scale with sharps)
-                       4: String Master - Whole notes with string specification (e.g., "B, S0")
+            note_detector: An optional NoteDetector-like instance.
+            difficulty: Game difficulty level (0-6).
+            target_note: A specific note to target for testing. Overrides difficulty.
         """
         # Initialize note detector and matcher
         self.detector = note_detector if note_detector is not None else NoteDetector()
@@ -137,16 +136,11 @@ class NoteGame:
 
         # Game state
         self.running = False
-        self.test_mode = False  # Flag for test mode
-        self.test_note = None  # Note to test in test mode
-        self.test_duration = 5  # Default test duration in seconds
         self.current_target = None
         self.current_note = None
         self.start_time = 0
-        self.last_note_change_time = (
-            0  # Track when the current note was first displayed
-        )
-        self.game_start_time = 0  # Track when the game started
+        self.last_note_change_time = 0
+        self.game_start_time = 0
         self.time_remaining = 0
         self.event_queue = queue.Queue()
         self.matched_notes = []
@@ -158,25 +152,28 @@ class NoteGame:
             "notes_per_second": 0.0,
             "high_score_nps": 0.0,
         }
-        self.TEST_NOTE = "F"
+
+        # Game settings
+        self.difficulty = difficulty
+        self.test_mode = bool(target_note)
+        self.test_note = target_note
         self.last_match_was_correct = None
 
-        # Set difficulty level
-        self.difficulty = difficulty
-        if self.difficulty in self.note_sets:
-            self.available_notes = self.note_sets[self.difficulty]
-        else:
-            logger.warning(
-                f"Invalid difficulty level: {self.difficulty}. Defaulting to 3."
-            )
-            self.difficulty = 3
-            self.available_notes = self.note_sets[self.difficulty]
-
-        # If in test mode, override available notes
-        if self.difficulty == 0:
-            self.test_mode = True
-            self.test_note = self.TEST_NOTE
+        if self.test_mode:
+            # In test mode, difficulty is 0 and we only use the target note.
+            self.difficulty = 0
             self.available_notes = [self.test_note]
+        else:
+            # In normal mode, select notes based on difficulty.
+            self.available_notes = self.note_sets.get(self.difficulty, [])
+
+        # Fallback if no notes are available for the selected mode/difficulty.
+        if not self.available_notes:
+            logger.warning(
+                f"No notes available for difficulty {self.difficulty}. Defaulting to level 1."
+            )
+            self.difficulty = 1
+            self.available_notes = self.note_sets[1]
 
         logger.debug(
             "NoteGame initialized with %d available notes", len(self.available_notes)
@@ -193,40 +190,36 @@ class NoteGame:
         if getattr(note, "is_stable", False):
             self.event_queue.put(note)
 
-    def process_events(self) -> None:
-        """Process note events from the queue. Should be called from the main game loop."""
+    def process_events(self) -> bool:
+        """Process note events from the queue. Returns True if a note was matched."""
+        note_matched = False
         try:
-            # Process all available notes in the queue without blocking
             while not self.event_queue.empty():
                 note = self.event_queue.get_nowait()
-                self._handle_stable_note(note)
+                if self._handle_stable_note(note):
+                    note_matched = True
         except queue.Empty:
-            # This is expected if the queue is empty, no-op.
-            pass
+            pass  # This is expected
+        return note_matched
 
-    def _handle_stable_note(self, note: DetectedNote) -> None:
-        """Handles the game logic for a stable note dequeued by process_events."""
+    def _handle_stable_note(self, note: DetectedNote) -> bool:
+        """Handles the game logic for a stable note. Returns True if a match occurred."""
         if not self.running:
-            return
+            return False
 
         played_note_full = note.note_name
-
-        # Parse the note name to get the note class (e.g., 'G#' from 'G#4')
         note_match = NOTE_PATTERN.match(played_note_full)
         if not note_match:
             logger.warning(f"Could not parse played note: {played_note_full}")
-            return
+            return False
 
         played_note_class = note_match.group(1).upper()
-
-        # Update stats for notes played, keyed by the note class
         self.stats["notes_played"][played_note_class] = (
             self.stats["notes_played"].get(played_note_class, 0) + 1
         )
 
         logger.info("STABLE NOTE DETECTED: %s", played_note_full)
 
-        # Use NoteMatcher to check if the played note matches the target
         target_note = self.current_target
         match_result = self.note_matcher.match(
             target_note, played_note_full, match_octave=self.difficulty >= 4
@@ -252,26 +245,33 @@ class NoteGame:
                 elapsed,
             )
             self.pick_new_target()
+            return True
+
+        return False
 
     def pick_new_target(self) -> str:
         """Pick a new target note from available notes based on current difficulty"""
         old_target = self.current_target
+
         if self.test_mode and self.test_note:
-            # In test mode, always return the test note
             self.current_target = self.test_note
+        elif not self.available_notes:
+            logger.error("No available notes to pick from. Halting game.")
+            self.stop_game()
+            return None
         else:
-            # In normal mode, pick a random note from available notes for current difficulty
             self.current_target = random.choice(self.available_notes)
 
         # Reset hint state and update timestamp
         self.last_note_change_time = time.time()
 
-        logger.debug(
-            "New target note: %s (was: %s) [Difficulty: %d]",
-            self.current_target,
-            old_target,
-            self.difficulty,
-        )
+        if self.current_target != old_target:
+            logger.debug(
+                "New target note: %s (was: %s) [Difficulty: %d]",
+                self.current_target,
+                old_target,
+                self.difficulty,
+            )
         return self.current_target
 
     def stop_game(self) -> None:

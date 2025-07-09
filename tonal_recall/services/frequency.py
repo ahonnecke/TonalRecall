@@ -181,35 +181,39 @@ class FrequencyService:
         elif 30 < self.fft_freq < 1000:
             detected_freq = self.fft_freq
 
-        # Octave error correction for low notes
-        if 70 < detected_freq < 150 and len(bass_freqs) > 0:
+        # Octave error correction for low and mid-range notes.
+        # This helps correct cases where the first harmonic is stronger than the fundamental.
+        if 70 < detected_freq < 300 and len(bass_freqs) > 0:
             sub_harmonic_freq = detected_freq / 2.0
-            tolerance_hz = 2.0
+            tolerance_hz = 2.0  # How close to look for the sub-harmonic
+
+            # Define frequency ranges for sub-harmonic and the detected peak
             sub_harmonic_min = sub_harmonic_freq - tolerance_hz
             sub_harmonic_max = sub_harmonic_freq + tolerance_hz
+            peak_min = detected_freq - tolerance_hz
+            peak_max = detected_freq + tolerance_hz
 
-            sub_harmonic_indices = np.where(
-                (bass_freqs >= sub_harmonic_min) & (bass_freqs <= sub_harmonic_max)
-            )
-            if len(sub_harmonic_indices[0]) > 0:
-                sub_harmonic_energy = np.sum(bass_magnitude[sub_harmonic_indices])
+            # Find energy in the sub-harmonic band
+            sub_harmonic_indices = np.where((bass_freqs >= sub_harmonic_min) & (bass_freqs <= sub_harmonic_max))
+            sub_harmonic_energy = np.sum(bass_magnitude[sub_harmonic_indices]) if len(sub_harmonic_indices[0]) > 0 else 0
 
-                peak_indices = np.where(
-                    (bass_freqs >= detected_freq - tolerance_hz)
-                    & (bass_freqs <= detected_freq + tolerance_hz)
+            # Find energy in the detected peak's band
+            peak_indices = np.where((bass_freqs >= peak_min) & (bass_freqs <= peak_max))
+            peak_energy = np.sum(bass_magnitude[peak_indices]) if len(peak_indices[0]) > 0 else 0
+
+            # If the sub-harmonic has significant energy relative to the peak, correct the frequency.
+            # The threshold (e.g., 0.3) is crucial. A lower value makes it more sensitive to sub-harmonics.
+            if peak_energy > 0 and sub_harmonic_energy > (peak_energy * 0.3):
+                logger.debug(
+                    f"OCTAVE CORRECTION: Original: {detected_freq:.1f}Hz (Energy: {peak_energy:.2f}). "
+                    f"Sub-harmonic: {sub_harmonic_freq:.1f}Hz (Energy: {sub_harmonic_energy:.2f}). Correcting pitch."
                 )
-                peak_energy = (
-                    np.sum(bass_magnitude[peak_indices])
-                    if len(peak_indices[0]) > 0
-                    else 0
+                detected_freq = sub_harmonic_freq
+            else:
+                logger.debug(
+                    f"OCTAVE CHECK: Original: {detected_freq:.1f}Hz (Energy: {peak_energy:.2f}). "
+                    f"Sub-harmonic: {sub_harmonic_freq:.1f}Hz (Energy: {sub_harmonic_energy:.2f}). No correction needed."
                 )
-
-                if peak_energy > 0 and sub_harmonic_energy > (peak_energy * 0.3):
-                    logger.debug(
-                        f"Octave error detected. Original: {detected_freq:.1f}Hz. "
-                        f"Correcting to {sub_harmonic_freq:.1f}Hz."
-                    )
-                    detected_freq = sub_harmonic_freq
 
         # If signal is weak, maintain the current stable note to prevent jumping
         if signal_max < 0.05 and current_stable_note:

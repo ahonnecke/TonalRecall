@@ -56,6 +56,11 @@ def parse_arguments():
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug logging."
     )
+    parser.add_argument(
+        "--note",
+        type=str,
+        help="Target a specific note for testing (e.g., 'C4'). Overrides difficulty to 0 and enables debug mode.",
+    )
 
     return parser.parse_args()
 
@@ -63,6 +68,11 @@ def parse_arguments():
 def main():
     """Main entry point for the Tonal Recall game."""
     args = parse_arguments()
+
+    # If a specific note is targeted for testing, override settings
+    if args.note:
+        args.difficulty = 0  # Use an empty note set
+        args.debug = True
 
     # Configure logging
     setup_logging(level="DEBUG" if args.debug else "INFO")
@@ -87,12 +97,15 @@ def main():
 
             detector = NoteDetector(**detector_config)
 
-
-            game = NoteGame(note_detector=detector, difficulty=args.difficulty)
+            game = NoteGame(
+                note_detector=detector,
+                difficulty=args.difficulty,
+                target_note=args.note,  # Pass the specific note to the game
+            )
             return game
 
         # The PygameUI.run() method now controls the entire application lifecycle.
-        ui.run(game_factory)
+        ui.run(game_factory, halt_on_match=bool(args.note))
 
     except Exception:
         logger.exception("An unhandled error occurred in the main application.")

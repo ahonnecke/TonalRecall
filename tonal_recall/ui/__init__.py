@@ -333,12 +333,13 @@ class PygameUI:
                         waiting = False
                 self.clock.tick(30)
 
-    def _run_game_loop(self, game, duration_secs):
+    def _run_game_loop(self, game, duration_secs, halt_on_match=False):
         """Run the main game loop.
 
         Args:
             game: The game instance.
             duration_secs: Duration of the game in seconds.
+            halt_on_match: If True, the loop will exit after the first correct match.
         """
         if not self.initialized or not self.screen:
             logger.error("Cannot run game loop: UI not initialized")
@@ -357,8 +358,15 @@ class PygameUI:
                     game.running = False
                     break
 
-            # Process note events from the queue
-            game.process_events()
+            # Process note events from the queue and check for match
+            note_matched = game.process_events()
+
+            if halt_on_match and note_matched:
+                logger.info(f"Target note '{game.current_target}' matched. Halting as requested.")
+                self.update_display(game)  # One final draw
+                time.sleep(1)  # Pause to show the final state
+                running = False
+                break
 
             # Update game state
             current_time = time.time()
@@ -387,12 +395,13 @@ class PygameUI:
         if hasattr(game, "detector") and game.detector:
             game.detector.stop()
 
-    def run(self, game_factory, duration_secs=60):
+    def run(self, game_factory, duration_secs=60, halt_on_match=False):
         """Run the entire UI flow: start screen, game, end screen.
 
         Args:
             game_factory: A function that creates a new game instance.
             duration_secs: The duration of each game round in seconds.
+            halt_on_match: If True, the game will stop after the first correct note.
         """
         if not self.initialized:
             self.init_screen()
@@ -411,11 +420,15 @@ class PygameUI:
                 game.start()
 
                 # Run the main game loop
-                self._run_game_loop(game, duration_secs)
+                self._run_game_loop(game, duration_secs, halt_on_match=halt_on_match)
 
                 # Stop the note detector
                 if game.detector:
                     game.detector.stop()
+
+                # If in test mode, don't show the end screen, just exit.
+                if halt_on_match:
+                    break
 
                 # Load persistent stats to show on the end screen
                 persistent_stats = save_stats(game.stats)
