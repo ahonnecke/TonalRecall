@@ -221,8 +221,10 @@ class NoteGame:
         logger.info("STABLE NOTE DETECTED: %s", played_note_full)
 
         target_note = self.current_target
+        # In test mode, always match the octave exactly.
+        match_octave = self.test_mode or self.difficulty >= 4
         match_result = self.note_matcher.match(
-            target_note, played_note_full, match_octave=self.difficulty >= 4
+            target_note, played_note_full, match_octave=match_octave
         )
         self.last_match_was_correct = match_result
 

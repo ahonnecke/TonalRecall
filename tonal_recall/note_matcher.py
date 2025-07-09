@@ -33,8 +33,7 @@ class NoteMatcher:
             return flat_to_sharp.get(note[:2], note[:2]) + note[2:]
         return note
 
-    @classmethod
-    def match(cls, target: str, played: str, match_octave: bool = False) -> bool:
+    def match(self, target: str, played: str, match_octave: bool = False) -> bool:
         """
         Check if the played note matches the target note, ignoring octave.
 
@@ -65,8 +64,8 @@ class NoteMatcher:
             logger.debug(f"🔍 INPUT - Raw target: '{target}', Raw played: '{played}'")
 
             # Normalize both notes to use sharps for consistency
-            normalized_target = cls.normalize_to_sharp(target)
-            normalized_played = cls.normalize_to_sharp(played)
+            normalized_target = self.normalize_to_sharp(target)
+            normalized_played = self.normalize_to_sharp(played)
             logger.debug(
                 f"🔄 NORMALIZED"
                 f"\n  • Target: '{target}' → '{normalized_target}'"
