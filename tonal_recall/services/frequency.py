@@ -159,6 +159,15 @@ class FrequencyService:
             return dom_freq, bass_freqs, bass_magnitude
         return 0, np.array([]), np.array([])
 
+    def _get_energy_in_hz(
+        self, fft_freqs, fft_magnitudes, target_freq, tolerance_hz=2.0
+    ):
+        """Calculate the energy in a frequency band."""
+        freq_min = target_freq - tolerance_hz
+        freq_max = target_freq + tolerance_hz
+        indices = np.where((fft_freqs >= freq_min) & (fft_freqs <= freq_max))
+        return np.sum(fft_magnitudes[indices]) if len(indices[0]) > 0 else 0
+
     def select_and_correct_pitch(
         self,
         aubio_pitch: float,
@@ -193,26 +202,22 @@ class FrequencyService:
             peak_min = detected_freq - tolerance_hz
             peak_max = detected_freq + tolerance_hz
 
-            # Find energy in the sub-harmonic band
-            sub_harmonic_indices = np.where((bass_freqs >= sub_harmonic_min) & (bass_freqs <= sub_harmonic_max))
-            sub_harmonic_energy = np.sum(bass_magnitude[sub_harmonic_indices]) if len(sub_harmonic_indices[0]) > 0 else 0
+            original_energy = self._get_energy_in_hz(
+                bass_freqs, bass_magnitude, detected_freq, tolerance_hz
+            )
+            sub_harmonic_energy = self._get_energy_in_hz(
+                bass_freqs, bass_magnitude, sub_harmonic_freq, tolerance_hz
+            )
 
-            # Find energy in the detected peak's band
-            peak_indices = np.where((bass_freqs >= peak_min) & (bass_freqs <= peak_max))
-            peak_energy = np.sum(bass_magnitude[peak_indices]) if len(peak_indices[0]) > 0 else 0
-
-            # If the sub-harmonic has significant energy relative to the peak, correct the frequency.
-            # The threshold (e.g., 0.3) is crucial. A lower value makes it more sensitive to sub-harmonics.
-            if peak_energy > 0 and sub_harmonic_energy > (peak_energy * 0.3):
+            # Weighted comparison to favor the sub-harmonic
+            if sub_harmonic_energy * 1.2 > original_energy:
                 logger.debug(
-                    f"OCTAVE CORRECTION: Original: {detected_freq:.1f}Hz (Energy: {peak_energy:.2f}). "
-                    f"Sub-harmonic: {sub_harmonic_freq:.1f}Hz (Energy: {sub_harmonic_energy:.2f}). Correcting pitch."
+                    f"OCTAVE CORRECTION: Original: {detected_freq:.1f}Hz (Energy: {original_energy:.2f}). Sub-harmonic: {sub_harmonic_freq:.1f}Hz (Energy: {sub_harmonic_energy:.2f}). Correcting pitch."
                 )
                 detected_freq = sub_harmonic_freq
             else:
                 logger.debug(
-                    f"OCTAVE CHECK: Original: {detected_freq:.1f}Hz (Energy: {peak_energy:.2f}). "
-                    f"Sub-harmonic: {sub_harmonic_freq:.1f}Hz (Energy: {sub_harmonic_energy:.2f}). No correction needed."
+                    f"OCTAVE CHECK: Original: {detected_freq:.1f}Hz (Energy: {original_energy:.2f}). Sub-harmonic: {sub_harmonic_freq:.1f}Hz (Energy: {sub_harmonic_energy:.2f}). No correction needed."
                 )
 
         # If signal is weak, maintain the current stable note to prevent jumping

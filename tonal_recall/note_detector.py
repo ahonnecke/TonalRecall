@@ -624,11 +624,11 @@ class NoteDetector:
                 dom_freq = service.fft_freq
 
                 current_time = time.strftime("%H:%M:%S")
-                if pitch > 0:
-                    note_name = get_note_name(pitch)
+                if detected_freq > 0:
+                    note_name = get_note_name(detected_freq)
                     dom_note = get_note_name(dom_freq) if dom_freq > 0 else "---"
                     logger.debug(
-                        f"{current_time} | Aubio: {pitch:.1f} Hz ({note_name}) | FFT: {dom_freq:.1f} Hz ({dom_note}) | Conf: {confidence:.2f} | Sig: {signal_max:.3f}"
+                        f"{current_time} | Detected: {note_name} | {detected_freq:.1f} Hz | Aubio: {pitch:.1f} Hz | FFT: {dom_freq:.1f} Hz | Conf: {confidence:.2f} | Sig: {signal_max:.3f}"
                     )
                 else:
                     dom_note = get_note_name(dom_freq) if dom_freq > 0 else "---"
